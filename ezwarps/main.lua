@@ -27,7 +27,7 @@ local special_animations = {
 local landings = {}
 local player_animations = {}
 local players_in_animations = {}
-local warp_types_with_landings = {"Server Warp","Custom Warp","Interact Warp","Radius Warp"}
+local warp_types_with_landings = {"Server Warp","Custom Warp","Interact Warp","Radius Warp","Home Warp"}
 
 function table_has_value (table, val)
     for index, value in ipairs(table) do

@@ -13,6 +13,7 @@ local custom_events_script_path = CONFIG.NPC_EVENTS_SCRIPT_PATH
 local custom_events_script_loaded = false
 local generic_npc_mug_animation_path = npc_asset_folder..'mug/mug.animation'
 local npcs = {}
+local tick_npcs = {}
 local events = require('scripts/ezlibs-scripts/eznpcs/dialogue_types')
 local current_player_conversation = {}
 local npc_required_properties = {"Direction","Asset Name"}
@@ -170,6 +171,9 @@ function add_behaviour(npc,behaviour)
     --optionally initialize can exist to init the behaviour when it is first added
     if behaviour.type and behaviour.action then
         npc[behaviour.type] = behaviour
+        if behaviour.type == 'on_tick' then
+            tick_npcs[npc.bot_id] = npc
+        end
         if behaviour.initialize then
             behaviour.initialize(npc)
         end
@@ -182,7 +186,7 @@ function clear_player_conversation(player_id)
     local bot_id = current_player_conversation[player_id]
     if bot_id then
         local npc = npcs[bot_id]
-        if not npc.dont_face_player then
+        if not npc.dont_face_player and npc.direction ~= nil then
             Net.set_bot_direction(npc.bot_id, npc.direction)
         end
         current_player_conversation[player_id] = nil
@@ -204,7 +208,17 @@ function chat_behaviour()
 
                 if not npc.dont_face_player then
                     local player_pos = Net.get_player_position(player_id)
-                    Net.set_bot_direction(npc.bot_id, Direction.from_points(npc, player_pos))
+
+                    local dir = nil
+                    if player_pos and player_pos.x ~= nil and player_pos.y ~= nil and npc.x ~= nil and npc.y ~= nil then
+                        dir = Direction.from_points(npc, player_pos)
+                    end
+
+                    if dir ~= nil then
+                        Net.set_bot_direction(npc.bot_id, dir)
+                    else
+                        -- keep current direction if facing can't be resolved
+                    end
                 end
 
                 local dialogue = npc.first_dialogue
@@ -388,10 +402,9 @@ function eznpcs.on_tick(delta_time)
         custom_events_script_loaded = true
         helpers.safe_require(custom_events_script_path)
     end
-    for bot_id, npc in pairs(npcs) do
-        if npc.on_tick then
-            npc.on_tick.action(npc,delta_time)
-        end
+
+    for bot_id, npc in pairs(tick_npcs) do
+        npc.on_tick.action(npc, delta_time)
     end
 end
 function eznpcs.create_npc(area_id,asset_name,x,y,z,direction,bot_name,animation_name,mug_animation_name)

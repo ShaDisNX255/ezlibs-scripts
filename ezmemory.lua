@@ -67,22 +67,64 @@ end
 
 local function ezmemory_save_file(file_path,value)
     return async(function ()
-        local json = json.encode(value)
+        local json = json.encode(value, true)
         await(Async.write_file(file_path.."_backup.json",json))
         await(Async.write_file(file_path..".json",json))
     end)
 end
 
 local function initialize_area_memory_file(area_id)
-    area_memory[area_id] = {
-        hidden_objects = {}
-    }
-    ezmemory.save_area_memory(area_id)
+    -- IMPORTANT: never overwrite an existing area memory file.
+    -- This is called both during boot-load and as a fallback from get_area_memory().
+    local loaded = nil
+    local io_ok = (io ~= nil and io.open ~= nil)
+
+    pcall(function()
+        if not io_ok then return end
+        local function _read(path)
+            local f = io.open(path, "rb")
+            if not f then return nil end
+            local s = f:read("*a")
+            f:close()
+            return s
+        end
+
+        local base = area_path_prefix .. area_id
+        local raw = _read(base .. ".json")
+        if raw then
+            local ok, data = pcall(function() return json.decode(raw) end)
+            if ok and type(data) == "table" and data.hidden_objects ~= nil then
+                loaded = data
+                return
+            end
+        end
+
+        raw = _read(base .. "_backup.json")
+        if raw then
+            local ok, data = pcall(function() return json.decode(raw) end)
+            if ok and type(data) == "table" and data.hidden_objects ~= nil then
+                loaded = data
+                return
+            end
+        end
+    end)
+
+    if loaded then
+        area_memory[area_id] = loaded
+        return area_memory[area_id]
+    end
+
+    area_memory[area_id] = { hidden_objects = {} }
+
+    if io_ok then
+        ezmemory.save_area_memory(area_id)
+    end
+    return area_memory[area_id]
 end
 
 local function load_all_memory()
     return async(function ()
-        --Load items
+        -- Load items first
         items = await(ezmemory_load_file(items_path))
         for item_id, item_data in pairs(items) do
             if item_data.key_item then
@@ -97,18 +139,32 @@ local function load_all_memory()
         end
         memory_loaded_flags.items = true
 
-        --Load player memory
+        -- Load player list first
         player_list = await(ezmemory_load_file(players_path))
+
+        -- Start all player loads at once
+        local player_promises = {}
         for safe_secret, name in pairs(player_list) do
-            player_memory[safe_secret] = await(ezmemory_load_file(player_path_prefix..safe_secret))
-            printd('loaded memory for '..name)
+            player_promises[safe_secret] = ezmemory_load_file(player_path_prefix..safe_secret)
+        end
+
+        -- Collect player results
+        for safe_secret, promise in pairs(player_promises) do
+            player_memory[safe_secret] = await(promise)
+            printd('loaded memory for '..player_list[safe_secret])
         end
         memory_loaded_flags.player_memory = true
 
-        --Load area memory for every area
+        -- Start all area loads at once
         local net_areas = Net.list_areas()
-        for i, area_id in ipairs(net_areas) do
-            local mem = await(ezmemory_load_file(area_path_prefix..area_id))
+        local area_promises = {}
+        for _, area_id in ipairs(net_areas) do
+            area_promises[area_id] = ezmemory_load_file(area_path_prefix..area_id)
+        end
+
+        -- Collect area results
+        for area_id, promise in pairs(area_promises) do
+            local mem = await(promise)
             if mem.hidden_objects then
                 area_memory[area_id] = mem
             else
@@ -117,7 +173,6 @@ local function load_all_memory()
             printd('loaded area memory for '..area_id)
         end
         memory_loaded_flags.area_memory = true
-
     end)
 end
 
@@ -255,9 +310,46 @@ end
 function ezmemory.get_area_memory(area_id)
     if area_memory[area_id] then
         return area_memory[area_id]
-    else
-        initialize_area_memory_file(area_id)
     end
+
+    -- If this area wasn't loaded at boot, try reading existing disk data first.
+    local loaded = nil
+    pcall(function()
+        local function _read(path)
+            local f = io.open(path, "rb")
+            if not f then return nil end
+            local s = f:read("*a")
+            f:close()
+            return s
+        end
+
+        local base = area_path_prefix .. area_id
+        local raw = _read(base .. ".json")
+        if raw then
+            local ok, data = pcall(function() return json.decode(raw) end)
+            if ok and type(data) == "table" and data.hidden_objects ~= nil then
+                loaded = data
+                return
+            end
+        end
+
+        raw = _read(base .. "_backup.json")
+        if raw then
+            local ok, data = pcall(function() return json.decode(raw) end)
+            if ok and type(data) == "table" and data.hidden_objects ~= nil then
+                loaded = data
+                return
+            end
+        end
+    end)
+
+    if loaded then
+        area_memory[area_id] = loaded
+        return area_memory[area_id]
+    end
+
+    initialize_area_memory_file(area_id)
+    return area_memory[area_id]
 end
 
 function ezmemory.get_player_memory(safe_secret)
@@ -370,20 +462,55 @@ function ezmemory.remove_player_item(player_id, name, remove_quant)
     return 0
 end
 
-function ezmemory.spend_player_money(player_id, amount)
+function ezmemory.get_player_money(player_id)
+    if not (Net.get_player_money and Net.set_player_money) then
+        return nil
+    end
+
     local safe_secret = helpers.get_safe_player_secret(player_id)
-    local player_memory = ezmemory.get_player_memory(safe_secret)
-    if player_memory.money >= amount then
-        local new_balance = player_memory.money-amount
-        Net.set_player_money(player_id, new_balance)
-        player_memory.money = new_balance
+    local pm = ezmemory.get_player_memory(safe_secret)
+
+    local net_money = tonumber(Net.get_player_money(player_id) or 0) or 0
+    local mem_money = tonumber(pm.money or net_money) or net_money
+
+    local merged = math.max(net_money, mem_money)
+
+    if pm.money ~= merged then
+        pm.money = merged
         ezmemory.save_player_memory(safe_secret)
+    end
+
+    if net_money ~= merged then
+        Net.set_player_money(player_id, merged)
+    end
+
+    return merged
+end
+
+function ezmemory.spend_player_money(player_id, amount)
+    amount = tonumber(amount) or 0
+    if amount == 0 then
         return true
     end
+
+    local current_money = tonumber(ezmemory.get_player_money(player_id) or 0) or 0
+
+    -- preserve old behavior: negative spend adds money
+    if amount < 0 then
+        ezmemory.set_player_money(player_id, current_money - amount)
+        return true
+    end
+
+    if current_money >= amount then
+        ezmemory.set_player_money(player_id, current_money - amount)
+        return true
+    end
+
     return false
 end
 
 function ezmemory.set_player_money(player_id, money)
+    money = tonumber(money) or 0
     local safe_secret = helpers.get_safe_player_secret(player_id)
     local player_memory = ezmemory.get_player_memory(safe_secret)
     Net.set_player_money(player_id, money)
@@ -504,7 +631,21 @@ function ezmemory.handle_player_join(player_id)
         end
     end
     --Send player money
-    Net.set_player_money(player_id, player_memory.money)
+    -- Merge any server-side money before pushing ezmemory money into Net.
+    if Net.get_player_money and Net.set_player_money then
+        local net_money = tonumber(Net.get_player_money(player_id) or 0) or 0
+        local mem_money = tonumber(player_memory.money or 0) or 0
+        local merged = math.max(net_money, mem_money)
+
+        if player_memory.money ~= merged then
+            player_memory.money = merged
+            ezmemory.save_player_memory(safe_secret)
+        end
+
+        Net.set_player_money(player_id, merged)
+    else
+        Net.set_player_money(player_id, player_memory.money)
+    end
     --update join count
     player_memory.meta.joins = player_memory.meta.joins + 1
     --also treat join as player transfer to do per area logic
@@ -574,17 +715,16 @@ function ezmemory.set_player_max_health(player_id, new_max_health, should_heal_b
     local max_health = Net.get_player_max_health(player_id)
 
     local new_health = current_health
-    --If max health is raised and flag is true, add the increase in max health to current health too
     if new_max_health > max_health and should_heal_by_increase then
-        local max_hp_increase = new_max_health-max_health
+        local max_hp_increase = new_max_health - max_health
         new_health = current_health + max_hp_increase
     end
 
-    local new_health = math.min(new_health, new_max_health)
-    Net.set_player_max_health(player_id,new_max_health)
-    Net.set_player_health(player_id,new_health)
+    new_health = math.min(new_health, new_max_health)
+    Net.set_player_max_health(player_id, new_max_health)
+    Net.set_player_health(player_id, new_health)
     player_memory.health = new_health
-    player_memory.max_health = max_health
+    player_memory.max_health = new_max_health
     ezmemory.save_player_memory(safe_secret)
 
     update_player_health(player_id)
@@ -593,12 +733,11 @@ end
 ezmemory.set_player_health = function(player_id, new_health)
     local safe_secret = helpers.get_safe_player_secret(player_id)
     local player_memory = ezmemory.get_player_memory(safe_secret)
-    local max_health = player_memory.max_health or Net.get_player_max_health(player_id)
+    local max_health = Net.get_player_max_health(player_id) or player_memory.max_health
 
-    -- dont set health to anything above the players max health
-    printd('setting player health to ',new_health)
-    local new_health = math.min(new_health, max_health)
-    Net.set_player_health(player_id,new_health)
+    printd('setting player health to ', new_health)
+    new_health = math.min(new_health, max_health)
+    Net.set_player_health(player_id, new_health)
     player_memory.health = new_health
     ezmemory.save_player_memory(safe_secret)
 
