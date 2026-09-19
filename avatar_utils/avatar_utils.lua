@@ -219,7 +219,7 @@ end
 --- @param filepath string path to the .animation file
 --- @return table|nil parsed animation structure, or nil on failure
 avatar_utils.parse_animation_file = function(filepath)
-    print('Parsing animation file: ' .. filepath)
+--    print('Parsing animation file: ' .. filepath)
 
     local file, err = io.open(filepath, "r")
     if not file then

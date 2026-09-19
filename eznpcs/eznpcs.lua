@@ -17,6 +17,7 @@ local quest_exclusive_placeholders = {}  -- list of { area_id, object_id, quest_
 local quest_exclusive_npcs = {}           -- player_id -> { placeholder_id = bot_id }
 
 local npcs = {}                           -- global bot ID -> npc data (for all bots, including exclusive)
+local tick_npcs = {}
 local current_player_conversation = {}
 
 local npc_asset_folder = '/server/assets/ezlibs-assets/eznpcs/'
@@ -231,6 +232,12 @@ end
 function add_behaviour(npc,behaviour)
     if behaviour.type and behaviour.action then
         npc[behaviour.type] = behaviour
+        if
+            behaviour.type == "on_tick" and
+            npc.bot_id
+        then
+            tick_npcs[npc.bot_id] = npc
+        end
         if behaviour.initialize then
             behaviour.initialize(npc)
         end
@@ -401,6 +408,7 @@ local function update_quest_exclusive_for_player(player_id)
         for placeholder_id, bot_id in pairs(quest_exclusive_npcs[player_id]) do
             Net.remove_bot(bot_id)
             npcs[bot_id] = nil
+			tick_npcs[bot_id] = nil
         end
         quest_exclusive_npcs[player_id] = nil
     end
@@ -516,10 +524,11 @@ function eznpcs.on_tick(delta_time)
         custom_events_script_loaded = true
         helpers.safe_require(custom_events_script_path)
     end
-    for bot_id, npc in pairs(npcs) do
-        if npc.on_tick then
-            npc.on_tick.action(npc,delta_time)
-        end
+    for bot_id, npc in pairs(tick_npcs) do
+        npc.on_tick.action(
+            npc,
+            delta_time
+        )
     end
 end
 
@@ -574,6 +583,7 @@ function eznpcs.handle_player_disconnect(player_id)
         for placeholder_id, bot_id in pairs(exclusive_npcs[player_id]) do
             Net.remove_bot(bot_id)
             npcs[bot_id] = nil
+			tick_npcs[bot_id] = nil
         end
         exclusive_npcs[player_id] = nil
     end
@@ -583,6 +593,7 @@ function eznpcs.handle_player_disconnect(player_id)
         for placeholder_id, bot_id in pairs(quest_exclusive_npcs[player_id]) do
             Net.remove_bot(bot_id)
             npcs[bot_id] = nil
+			tick_npcs[bot_id] = nil
         end
         quest_exclusive_npcs[player_id] = nil
     end
@@ -656,6 +667,7 @@ function eznpcs.remove_exclusive_npc(player_id, placeholder_id)
         if bot_id then
             Net.remove_bot(bot_id)
             npcs[bot_id] = nil
+			tick_npcs[bot_id] = nil
             exclusive_npcs[player_id][tostring(placeholder_id)] = nil
             printd("Removed exclusive NPC bot", bot_id, "for player", player_id)
         end
@@ -669,6 +681,7 @@ function eznpcs.remove_quest_exclusive_npc(player_id, placeholder_id)
         if bot_id then
             Net.remove_bot(bot_id)
             npcs[bot_id] = nil
+			tick_npcs[bot_id] = nil
             quest_exclusive_npcs[player_id][tostring(placeholder_id)] = nil
             printd("Removed quest‑exclusive NPC bot", bot_id, "for player", player_id)
         end
