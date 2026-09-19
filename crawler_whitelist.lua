@@ -15,6 +15,11 @@ local enums =
         'scripts/libs/enums'
     )
 
+local crawler_loot_tiers =
+    require(
+        "scripts/ezlibs-scripts/crawler_loot_tiers"
+    )
+
 local AssetType =
     enums.AssetType
 
@@ -1945,6 +1950,35 @@ local hydrated_run_for_player = {}
 -- ============================================================
 -- FILE HELPERS
 -- ============================================================
+local function get_player_reward_tier(
+    player_id
+)
+    local area_id =
+        Net.get_player_area(
+            player_id
+        )
+
+    if not area_id then
+        return nil
+    end
+
+    local tier =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_reward_tier"
+        )
+
+    if
+        tier == "easy" or
+        tier == "medium" or
+        tier == "hard"
+    then
+        return tier
+    end
+
+    return nil
+end
+
 
 local function read_text_file(path)
     local file =
@@ -2746,25 +2780,64 @@ function crawler_whitelist.get_available_cards_for_source(
         return {}
     end
 
+
+    local reward_tier =
+        get_player_reward_tier(
+            player_id
+        )
+
+
     local candidates = {}
+
 
     for card_key, card_def in
         pairs(crawler_whitelist.CARDS)
     do
+        local tier_allowed =
+            true
+
+
+        -- Difficulty filtering currently applies only to
+        -- the reward systems that have tier tables.
+        --
+        -- This deliberately leaves future battle/boss
+        -- reward sources alone until we categorize them.
+        if
+            reward_tier and
+            (
+                source == "blue_mystery" or
+                source == "chip_seller"
+            )
+        then
+            tier_allowed =
+                crawler_loot_tiers.matches(
+                    source,
+                    card_key,
+                    reward_tier
+                )
+        end
+
+
         if
             card_def.sources and
             card_def.sources[source] == true and
-            unlocks[card_key] ~= true
+            unlocks[card_key] ~= true and
+            tier_allowed
         then
             candidates[
                 #candidates + 1
-            ] = card_key
+            ] =
+                card_key
         end
     end
 
+
     -- Keeps the candidate list deterministic before
     -- selecting a random entry.
-    table.sort(candidates)
+    table.sort(
+        candidates
+    )
+
 
     return candidates
 end
