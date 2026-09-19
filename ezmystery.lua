@@ -56,7 +56,7 @@ end
 local function fetch_player_avatar_and_details(player_id)
     local player_secret = Net.get_player_secret(player_id)
     local player_avatar = AvatarCache.get_player_avatar_paths(player_secret)
-    print(player_avatar)
+    --print(player_avatar)
 
     local texture_path = ""
     local anim_path = ""
@@ -71,7 +71,7 @@ local function fetch_player_avatar_and_details(player_id)
     player_avatars[player_secret] = { texture_path = texture_path, anim_path = anim_path }
     local parsed = AvatarUtils.parse_animation_file(anim_path)
     player_animations[player_secret] = parsed
-    print(player_animations)
+    --print(player_animations)
 end
 
 Net:on("player_join", function(event)

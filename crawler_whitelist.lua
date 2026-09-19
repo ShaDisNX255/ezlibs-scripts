@@ -2610,6 +2610,22 @@ local function queue_unlocked_cards_for_current_run(
     return true
 end
 
+function crawler_whitelist.restore_unlocked_cards_for_current_run(
+    player_id
+)
+    -- The player must already be inside the runtime dungeon area
+    -- before this is called, because both the generated whitelist
+    -- and the reward restoration check dungeon_run_id.
+
+    crawler_whitelist.apply_for_player(
+        player_id
+    )
+
+    return queue_unlocked_cards_for_current_run(
+        player_id
+    )
+end
+
 function crawler_whitelist.unlock_card(
     player_id,
     card_key
