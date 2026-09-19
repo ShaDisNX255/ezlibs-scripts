@@ -7,6 +7,7 @@ local ezcache = require('scripts/ezlibs-scripts/ezcache')
 local ezencounters = require('scripts/ezlibs-scripts/ezencounters/main')
 eznpcs = require('scripts/ezlibs-scripts/eznpcs/eznpcs')
 local ezmemory = require('scripts/ezlibs-scripts/ezmemory')
+local crawler_whitelist = require('scripts/ezlibs-scripts/crawler_whitelist')
 local ezmystery = require('scripts/ezlibs-scripts/ezmystery')
 local ezweather = require('scripts/ezlibs-scripts/ezweather')
 local ezwarps = require('scripts/ezlibs-scripts/ezwarps/main')
@@ -22,10 +23,11 @@ local ezbbs = require('scripts/ezlibs-scripts/ezbbs')   -- NEW BBS plugin
 
 local plugins = { 
     ezweather, 
-    eznpcs, 
-    ezmemory, 
-    ezmystery, 
-    ezwarps, 
+    eznpcs,
+    ezmemory,
+    crawler_whitelist,
+    ezmystery,
+    ezwarps,
     ezencounters,
     eztriggers, 
     ezemail, 

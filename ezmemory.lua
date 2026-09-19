@@ -932,6 +932,9 @@ local function reset_crawler_run_state(
     player_memory.tokens = 0
     player_memory.area_memory = {}
 
+    -- Chips earned during the previous dungeon run.
+    player_memory.crawler_chip_unlocks = {}
+
     player_memory.health = nil
     player_memory.max_health = nil
 
