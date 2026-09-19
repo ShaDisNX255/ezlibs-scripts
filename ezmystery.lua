@@ -52,7 +52,7 @@ end
 local function fetch_player_avatar_and_details(player_id)
     local player_secret = Net.get_player_secret(player_id)
     local player_avatar = AvatarCache.get_player_avatar_paths(player_secret)
---    print(player_avatar)
+    print(player_avatar)
 
     local texture_path = ""
     local anim_path = ""
@@ -67,7 +67,7 @@ local function fetch_player_avatar_and_details(player_id)
     player_avatars[player_secret] = { texture_path = texture_path, anim_path = anim_path }
     local parsed = AvatarUtils.parse_animation_file(anim_path)
     player_animations[player_secret] = parsed
---    print(player_animations)
+    print(player_animations)
 end
 
 Net:on("player_join", function(event)
@@ -93,40 +93,189 @@ function ezmystery.handle_player_disconnect(player_id)
 end
 
 function ezmystery.hide_random_data(player_id)
-    local area_id = Net.get_player_area(player_id)
-    local objects = Net.list_objects(area_id)
-    local area_min_mystery_count = tonumber(Net.get_area_custom_property(area_id, "Mystery Data Minimum")) or 1
-    local area_max_mystery_count = tonumber(Net.get_area_custom_property(area_id, "Mystery Data Maximum")) or 0
-    if area_min_mystery_count > area_max_mystery_count then return end
-    if revealed_mysteries_for_players[player_id] == nil then revealed_mysteries_for_players[player_id] = {} end
-    if revealed_mysteries_for_players[player_id] and revealed_mysteries_for_players[player_id][area_id] then
+    local area_id =
+        Net.get_player_area(
+            player_id
+        )
+
+    local objects =
+        Net.list_objects(
+            area_id
+        )
+
+    local area_min_mystery_count =
+        tonumber(
+            Net.get_area_custom_property(
+                area_id,
+                "Mystery Data Minimum"
+            )
+        ) or 1
+
+    local area_max_mystery_count =
+        tonumber(
+            Net.get_area_custom_property(
+                area_id,
+                "Mystery Data Maximum"
+            )
+        ) or 0
+
+    if
+        area_min_mystery_count >
+        area_max_mystery_count
+    then
         return
     end
+
+    local dungeon_run_id =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_run_id"
+        )
+
+    local persist_for_run =
+        dungeon_run_id ~= nil and
+        tostring(dungeon_run_id) ~= ""
+
+    local safe_secret
+    local player_area_memory
+
+    if persist_for_run then
+        safe_secret =
+            helpers.get_safe_player_secret(
+                player_id
+            )
+
+        player_area_memory =
+            ezmemory.get_player_area_memory(
+                safe_secret,
+                area_id
+            )
+
+        -- This player's Mystery Data roll for this
+        -- runtime area has already been decided.
+        if player_area_memory.mystery_roll_done then
+            return
+        end
+    end
+
+    if
+        revealed_mysteries_for_players[
+            player_id
+        ] == nil
+    then
+        revealed_mysteries_for_players[
+            player_id
+        ] = {}
+    end
+
+    if
+        revealed_mysteries_for_players[
+            player_id
+        ][area_id]
+    then
+        return
+    end
+
     local mystery_count = 0
-    local desired_mystery_count = math.random(area_min_mystery_count, area_max_mystery_count)
-    revealed_mysteries_for_players[player_id][area_id] = {}
+
+    local desired_mystery_count =
+        math.random(
+            area_min_mystery_count,
+            area_max_mystery_count
+        )
+
+    revealed_mysteries_for_players[
+        player_id
+    ][area_id] = {}
+
     local datum_list = {}
-    for i, object_id in next, objects do
-        local object = Net.get_object_by_id(area_id, object_id)
+
+    for _, object_id in next, objects do
+        local object =
+            Net.get_object_by_id(
+                area_id,
+                object_id
+            )
+
         if object_is_mystery_data(object) then
-            local once = is_property_true(object.custom_properties["Once"])
-            local locked = is_property_true(object.custom_properties["Locked"])
+            local once =
+                is_property_true(
+                    object.custom_properties[
+                        "Once"
+                    ]
+                )
+
+            local locked =
+                is_property_true(
+                    object.custom_properties[
+                        "Locked"
+                    ]
+                )
+
             if not once and not locked then
-                table.insert(datum_list, object.id)
-                mystery_count = mystery_count + 1
+                table.insert(
+                    datum_list,
+                    object.id
+                )
+
+                mystery_count =
+                    mystery_count + 1
             end
         end
     end
-    while mystery_count > desired_mystery_count do
-        local index = math.random(#datum_list)
-        local mystery = datum_list[index]
+
+    while
+        mystery_count >
+        desired_mystery_count
+    do
+        local index =
+            math.random(
+                #datum_list
+            )
+
+        local mystery =
+            datum_list[index]
+
         if mystery ~= nil then
-            ezmemory.hide_object_from_player_till_disconnect(player_id, area_id, mystery)
-            table.remove(datum_list, helpers.indexOf(datum_list, mystery))
-            mystery_count = #datum_list
+            if persist_for_run then
+                ezmemory.hide_object_from_player(
+                    player_id,
+                    area_id,
+                    mystery
+                )
+            else
+                ezmemory.hide_object_from_player_till_disconnect(
+                    player_id,
+                    area_id,
+                    mystery
+                )
+            end
+
+            table.remove(
+                datum_list,
+                helpers.indexOf(
+                    datum_list,
+                    mystery
+                )
+            )
+
+            mystery_count =
+                #datum_list
         end
     end
-    revealed_mysteries_for_players[player_id][area_id] = datum_list
+
+    revealed_mysteries_for_players[
+        player_id
+    ][area_id] = datum_list
+
+    if persist_for_run then
+        player_area_memory.mystery_roll_done =
+            true
+
+        ezmemory.save_player_memory(
+            safe_secret
+        )
+    end
 end
 
 function ezmystery.handle_player_transfer(player_id)
@@ -385,11 +534,51 @@ function collect_datum(player_id, object, datum_id_override, is_quiz)
 
         -- For non-encounter types, apply hiding after reward
         if item_info.type ~= "encounter" then
-            if is_property_true(object.custom_properties["Once"]) then
-                print("[ezmystery] Hiding permanently for player", player_id, "object", datum_id_override)
-                ezmemory.hide_object_from_player(player_id, area_id, datum_id_override)
+            local dungeon_run_id =
+                Net.get_area_custom_property(
+                    area_id,
+                    "dungeon_run_id"
+                )
+
+            if
+                dungeon_run_id and
+                tostring(dungeon_run_id) ~= ""
+            then
+                -- Runtime dungeon Mystery Data can only
+                -- be collected once during this run.
+                ezmemory.hide_object_from_player(
+                    player_id,
+                    area_id,
+                    datum_id_override
+                )
+
+            elseif
+                is_property_true(
+                    object.custom_properties[
+                        "Once"
+                    ]
+                )
+            then
+                print(
+                    "[ezmystery] Hiding permanently for player",
+                    player_id,
+                    "object",
+                    datum_id_override
+                )
+
+                ezmemory.hide_object_from_player(
+                    player_id,
+                    area_id,
+                    datum_id_override
+                )
+
+            else
+                ezmemory.hide_object_from_player_till_disconnect(
+                    player_id,
+                    area_id,
+                    datum_id_override
+                )
             end
-            ezmemory.hide_object_from_player_till_disconnect(player_id, area_id, datum_id_override)
         end
     end)
 end

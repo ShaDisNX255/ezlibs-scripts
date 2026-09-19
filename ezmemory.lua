@@ -158,7 +158,8 @@ local function normalize_player_memory(mem)
     mem.money = mem.money or 0
     mem.fragments = mem.fragments or 0
     mem.tokens = mem.tokens or 0
-    mem.meta = mem.meta or { joins = 0 }
+    mem.meta = mem.meta or {}
+    mem.meta.joins = mem.meta.joins or 0
     mem.area_memory = mem.area_memory or {}
     mem.emails = mem.emails or {}
     mem.emails.by_id = mem.emails.by_id or {}
@@ -885,7 +886,80 @@ function ezmemory.object_is_hidden_from_player_till_disconnect(player_id, area_i
 end
 
 function ezmemory.handle_player_disconnect(player_id)
-    objects_hidden_till_disconnect_for_player = {}
+    objects_hidden_till_disconnect_for_player[player_id] = nil
+    pending_item_get_anims[player_id] = nil
+end
+
+local function reset_crawler_run_state(
+    player_id,
+    safe_secret,
+    player_memory,
+    run_id
+)
+    printd(
+        "starting new crawler run for " ..
+        tostring(player_id) ..
+        " run=" ..
+        tostring(run_id)
+    )
+
+    -- Remove any engine-side key items before clearing memory.
+    for item_id, quantity in pairs(
+        player_memory.items or {}
+    ) do
+        local item_info =
+            items[tostring(item_id)] or
+            items[item_id]
+
+        if item_info and item_info.key_item then
+            local count =
+                tonumber(quantity) or 0
+
+            for _ = 1, count do
+                pcall(
+                    Net.remove_player_item,
+                    player_id,
+                    item_id
+                )
+            end
+        end
+    end
+
+    -- Everything below is run progression.
+    player_memory.items = {}
+    player_memory.money = 0
+    player_memory.fragments = 0
+    player_memory.tokens = 0
+    player_memory.area_memory = {}
+
+    player_memory.health = nil
+    player_memory.max_health = nil
+
+    player_memory.meta =
+        player_memory.meta or {}
+
+    player_memory.meta.crawler_run_id =
+        tostring(run_id)
+
+    objects_hidden_till_disconnect_for_player[
+        player_id
+    ] = {}
+
+    Net.set_player_money(
+        player_id,
+        0
+    )
+
+    if Net.set_player_fragments then
+        Net.set_player_fragments(
+            player_id,
+            0
+        )
+    end
+
+    ezmemory.save_player_memory(
+        safe_secret
+    )
 end
 
 function ezmemory.handle_player_join(player_id)
@@ -934,6 +1008,42 @@ function ezmemory.handle_player_transfer(player_id)
     local safe_secret = helpers.get_safe_player_secret(player_id)
     local player_name = Net.get_player_name(player_id)
     local area_id = Net.get_player_area(player_id)
+    local player_memory =
+        ezmemory.get_player_memory(
+            safe_secret
+        )
+
+    local started_new_crawler_run = false
+
+    local dungeon_run_id =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_run_id"
+        )
+
+    if
+        dungeon_run_id and
+        tostring(dungeon_run_id) ~= "" and
+        tostring(dungeon_run_id) ~= "pool"
+    then
+        local previous_run_id =
+            player_memory.meta and
+            player_memory.meta.crawler_run_id
+
+        if
+            tostring(previous_run_id or "") ~=
+            tostring(dungeon_run_id)
+        then
+            reset_crawler_run_state(
+                player_id,
+                safe_secret,
+                player_memory,
+                dungeon_run_id
+            )
+
+            started_new_crawler_run = true
+        end
+    end
     if objects_hidden_till_disconnect_for_player[player_id] then
         if objects_hidden_till_disconnect_for_player[player_id][area_id] then
             for object_id, is_hidden in pairs(objects_hidden_till_disconnect_for_player[player_id][area_id]) do
@@ -946,6 +1056,27 @@ function ezmemory.handle_player_transfer(player_id)
         objects_hidden_till_disconnect_for_player[player_id] = {}
     end
     update_player_health(player_id)
+    if started_new_crawler_run then
+        local max_health =
+            Net.get_player_max_health(
+                player_id
+            )
+
+        Net.set_player_health(
+            player_id,
+            max_health
+        )
+
+        player_memory.health =
+            max_health
+
+        player_memory.max_health =
+            max_health
+
+        ezmemory.save_player_memory(
+            safe_secret
+        )
+    end
     local area_memory = ezmemory.get_area_memory(area_id)
     if area_memory and area_memory.hidden_objects then
         for index, object_id in ipairs(area_memory.hidden_objects) do
