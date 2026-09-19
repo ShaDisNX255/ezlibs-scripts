@@ -2150,6 +2150,98 @@ local function get_current_run_unlocks(
         true
 end
 
+function crawler_whitelist.begin_run_for_player(
+    player_id,
+    run_id
+)
+    run_id =
+        tostring(
+            run_id or ""
+        )
+
+    if run_id == ""
+        or run_id == "pool"
+    then
+        return false,
+            "invalid_run_id"
+    end
+
+
+    local player_memory,
+        safe_secret =
+        get_player_memory(
+            player_id
+        )
+
+    if not player_memory
+        or not safe_secret
+    then
+        return false,
+            "missing_player_memory"
+    end
+
+
+    if type(
+        player_memory.meta
+    ) ~= "table"
+    then
+        player_memory.meta = {}
+    end
+
+
+    local previous_run_id =
+        tostring(
+            player_memory.meta.crawler_run_id
+                or ""
+        )
+
+
+    -- A genuinely new run starts with no earned crawler chips.
+    --
+    -- Re-entering the SAME active run keeps everything already
+    -- earned during that run.
+    if previous_run_id ~= run_id then
+        player_memory.crawler_chip_unlocks = {}
+
+        pending_reward_packets[
+            player_id
+        ] = nil
+
+        hydrated_run_for_player[
+            player_id
+        ] = nil
+    end
+
+
+    if type(
+        player_memory.crawler_chip_unlocks
+    ) ~= "table"
+    then
+        player_memory.crawler_chip_unlocks = {}
+    end
+
+
+    player_memory.meta.crawler_run_id =
+        run_id
+
+
+    ezmemory.save_player_memory(
+        safe_secret
+    )
+
+
+    print(
+        "[crawler_whitelist] player " ..
+        tostring(player_id) ..
+        " entered crawler run " ..
+        run_id
+    )
+
+
+    return true,
+        "ready"
+end
+
 
 -- ============================================================
 -- WHITELIST GENERATION
