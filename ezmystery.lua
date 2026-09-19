@@ -1,5 +1,9 @@
 local ezmystery = {}
 local ezmemory = require('scripts/ezlibs-scripts/ezmemory')
+local crawler_whitelist =
+    require(
+        'scripts/ezlibs-scripts/crawler_whitelist'
+    )
 local ezcache = require('scripts/ezlibs-scripts/ezcache')
 local helpers = require('scripts/ezlibs-scripts/helpers')
 local ezlocks = require('scripts/ezlibs-scripts/ezlocks')
@@ -496,6 +500,89 @@ function collect_datum(player_id, object, datum_id_override, is_quiz)
                 local randomly_selected_datum = ezcache.get_object_by_id_cached(area_id, random_selection_id)
                 await(collect_datum(player_id, randomly_selected_datum, datum_id_override, false))
             end
+
+        elseif item_info.type == "crawler_chip" then
+            local source =
+                tostring(
+                    object.custom_properties[
+                        "Chip Source"
+                    ] or
+                    "blue_mystery"
+                )
+
+            local direction =
+                Net.get_player_direction(
+                    player_id
+                )
+
+            local unlocked,
+                  reason,
+                  card_def =
+                crawler_whitelist.unlock_random_card_from_source(
+                    player_id,
+                    source
+                )
+
+            if not unlocked then
+                if reason == "pool_exhausted" then
+                    await(
+                        Async.message_player(
+                            player_id,
+                            "No new chip data was found."
+                        )
+                    )
+                else
+                    warn(
+                        "[ezmystery] failed granting crawler chip: " ..
+                        tostring(reason)
+                    )
+
+                    await(
+                        Async.message_player(
+                            player_id,
+                            "The chip data could not be read."
+                        )
+                    )
+                end
+
+                -- Don't consume the crystal if no valid reward
+                -- could actually be granted.
+                return
+            end
+
+            ezmemory.play_anim_get(
+                player_id
+            )
+
+            Net.play_sound_for_player(
+                player_id,
+                sfx.item_get
+            )
+
+            local display_name =
+                card_def.display_name or
+                card_def.card_key or
+                card_def.package_id or
+                "BattleChip"
+
+            local code =
+                card_def.code or "*"
+
+            await(
+                Async.message_player(
+                    player_id,
+                    "Got " ..
+                    display_name ..
+                    " " ..
+                    code ..
+                    "!"
+                )
+            )
+
+            ezmemory.set_direction_anim(
+                player_id,
+                direction
+            )
 
         elseif item_info.type == "encounter" then
             -- Start an encounter

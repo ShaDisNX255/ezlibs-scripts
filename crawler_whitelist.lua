@@ -33,19 +33,6 @@ local GENERATED_WHITELIST_DIR =
     "/server/assets/generated_whitelists"
 
 
--- Temporary prototype behavior.
---
--- Bubbler stays locked in default and depth 0.
--- Reaching depth 1 unlocks it for the current run.
---
--- REMOVE this after the whitelist prototype is verified.
-local DEBUG_UNLOCK_CARD =
-    "bubbler"
-
-local DEBUG_UNLOCK_DEPTH =
-    1
-
-
 -- ============================================================
 -- CARD REGISTRY
 -- ============================================================
@@ -67,9 +54,11 @@ crawler_whitelist.CARDS = {
 
         code = "P",
 
-        -- We are intentionally NOT assigning its real reward
-        -- source yet. This chip is only our whitelist test.
-        sources = {},
+        display_name = "Bubbler",
+
+        sources = {
+            blue_mystery = true,
+        },
     },
 }
 
@@ -713,7 +702,8 @@ function crawler_whitelist.unlock_card(
 
     if not card_def then
         return false,
-            "unknown_card"
+            "unknown_card",
+            nil
     end
 
     local unlocks,
@@ -725,7 +715,8 @@ function crawler_whitelist.unlock_card(
 
     if not active_run then
         return false,
-            "not_in_active_run"
+            "not_in_active_run",
+            card_def
     end
 
     if unlocks[card_key] then
@@ -734,7 +725,8 @@ function crawler_whitelist.unlock_card(
         )
 
         return false,
-            "already_unlocked"
+            "already_unlocked",
+            card_def
     end
 
     unlocks[
@@ -776,9 +768,111 @@ function crawler_whitelist.unlock_card(
     )
 
     return true,
-        "unlocked"
+        "unlocked",
+        card_def
 end
 
+function crawler_whitelist.unlock_card_from_source(
+    player_id,
+    card_key,
+    source
+)
+    if not crawler_whitelist.card_allows_source(
+        card_key,
+        source
+    ) then
+        return false,
+            "source_not_allowed",
+            crawler_whitelist.get_card_def(
+                card_key
+            )
+    end
+
+    return crawler_whitelist.unlock_card(
+        player_id,
+        card_key
+    )
+end
+
+
+function crawler_whitelist.get_available_cards_for_source(
+    player_id,
+    source
+)
+    local unlocks,
+          _,
+          active_run =
+        get_current_run_unlocks(
+            player_id
+        )
+
+    if not active_run then
+        return {}
+    end
+
+    local candidates = {}
+
+    for card_key, card_def in
+        pairs(crawler_whitelist.CARDS)
+    do
+        if
+            card_def.sources and
+            card_def.sources[source] == true and
+            unlocks[card_key] ~= true
+        then
+            candidates[
+                #candidates + 1
+            ] = card_key
+        end
+    end
+
+    -- Keeps the candidate list deterministic before
+    -- selecting a random entry.
+    table.sort(candidates)
+
+    return candidates
+end
+
+
+function crawler_whitelist.unlock_random_card_from_source(
+    player_id,
+    source
+)
+    local candidates =
+        crawler_whitelist.get_available_cards_for_source(
+            player_id,
+            source
+        )
+
+    if #candidates == 0 then
+        return false,
+            "pool_exhausted",
+            nil
+    end
+
+    local card_key =
+        candidates[
+            math.random(
+                1,
+                #candidates
+            )
+        ]
+
+    local ok,
+          reason,
+          card_def =
+        crawler_whitelist.unlock_card_from_source(
+            player_id,
+            card_key,
+            source
+        )
+
+    return
+        ok,
+        reason,
+        card_def,
+        card_key
+end
 
 -- ============================================================
 -- EZLIBS PLUGIN HANDLERS
@@ -811,70 +905,15 @@ end
 function crawler_whitelist.handle_player_transfer(
     player_id
 )
-    -- Always apply first.
-    --
-    -- This means default.tmx and the dungeon root get the
-    -- properly restricted whitelist before the debug unlock.
     crawler_whitelist.apply_for_player(
         player_id
     )
 
-    -- If this is the player's first entry into this active run
-    -- during the current connection, restore all chips they had
-    -- already earned during this run.
+    -- Restore chips already earned during this run after
+    -- reconnecting to the server.
     queue_unlocked_cards_for_current_run(
         player_id
     )
-
--- ========================================================
--- TEMPORARY TEST
-    -- ========================================================
-
-    if not DEBUG_UNLOCK_CARD then
-        return
-    end
-
-    local area_id =
-        Net.get_player_area(
-            player_id
-        )
-
-    local run_id =
-        Net.get_area_custom_property(
-            area_id,
-            "dungeon_run_id"
-        )
-
-    local depth =
-        tonumber(
-            Net.get_area_custom_property(
-                area_id,
-                "dungeon_depth"
-            )
-        )
-
-    if
-        run_id and
-        tostring(run_id) ~= "" and
-        depth and
-        depth >= DEBUG_UNLOCK_DEPTH and
-        not crawler_whitelist.player_has_card_unlocked(
-            player_id,
-            DEBUG_UNLOCK_CARD
-        )
-    then
-        print(
-            "[crawler_whitelist] DEBUG depth " ..
-            tostring(depth) ..
-            " reached; unlocking " ..
-            DEBUG_UNLOCK_CARD
-        )
-
-        crawler_whitelist.unlock_card(
-            player_id,
-            DEBUG_UNLOCK_CARD
-        )
-    end
 end
 
 function crawler_whitelist.on_tick(
