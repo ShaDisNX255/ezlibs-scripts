@@ -244,13 +244,93 @@ function add_behaviour(npc,behaviour)
     end
 end
 
+local idle_anim_by_direction = {
+    ["Up Right"] = "IDLE_UR",
+    ["Up Left"] = "IDLE_UL",
+    ["Down Right"] = "IDLE_DR",
+    ["Down Left"] = "IDLE_DL",
+
+    -- Four-direction NPC sheets do not have cardinal idle states.
+    ["Up"] = "IDLE_UR",
+    ["Right"] = "IDLE_DR",
+    ["Down"] = "IDLE_DL",
+    ["Left"] = "IDLE_UL",
+}
+
+local function set_npc_facing(npc, direction)
+    if not npc or not npc.bot_id or not direction then
+        return
+    end
+
+    Net.set_bot_direction(
+        npc.bot_id,
+        direction
+    )
+
+    local idle_state =
+        idle_anim_by_direction[
+            direction
+        ]
+
+    if idle_state then
+        pcall(
+            Net.animate_bot,
+            npc.bot_id,
+            idle_state,
+            true
+        )
+    end
+end
+
+local function face_npc_toward_player(
+    npc,
+    player_id
+)
+    local player_pos =
+        Net.get_player_position(
+            player_id
+        )
+
+    if not player_pos then
+        return
+    end
+
+    local npc_pos = npc
+
+    if Net.get_bot_position then
+        local ok, live_pos =
+            pcall(
+                Net.get_bot_position,
+                npc.bot_id
+            )
+
+        if ok and live_pos then
+            npc_pos = live_pos
+        end
+    end
+
+    local direction =
+        Direction.from_points(
+            npc_pos,
+            player_pos
+        )
+
+    set_npc_facing(
+        npc,
+        direction
+    )
+end
+
 function clear_player_conversation(player_id)
     Net.unlock_player_input(player_id)
     local bot_id = current_player_conversation[player_id]
     if bot_id then
         local npc = npcs[bot_id]
         if npc and not npc.dont_face_player then
-            Net.set_bot_direction(npc.bot_id, npc.direction)
+            set_npc_facing(
+                npc,
+                npc.direction
+            )
         end
         current_player_conversation[player_id] = nil
         ezbus:emit("dialogue_ended", {
@@ -272,11 +352,10 @@ function chat_behaviour()
                 current_player_conversation[player_id] = npc.bot_id
 
                 if not npc.dont_face_player then
-                    local player_pos = Net.get_player_position(player_id)
-                    local dir = player_pos and Direction.from_points(npc, player_pos) or nil
-                    if dir then
-                        Net.set_bot_direction(npc.bot_id, dir)
-                    end
+                    face_npc_toward_player(
+                        npc,
+                        player_id
+                    )
                 end
 
                 local dialogue = npc.first_dialogue
