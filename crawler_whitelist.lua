@@ -111,6 +111,15 @@ end
 
 local cached_whitelist = {}
 
+local POST_UNLOCK_REWARD_DELAY_TICKS = 20
+local REJOIN_REWARD_DELAY_TICKS = 20
+
+local pending_reward_packets = {}
+
+-- Tracks whether this client session has already been
+-- rehydrated for a particular dungeon run.
+local hydrated_run_for_player = {}
+
 
 -- ============================================================
 -- FILE HELPERS
@@ -150,6 +159,77 @@ local function whitelist_text_hash(text)
     return tostring(hash)
 end
 
+local function build_card_reward_entry(
+    card_def,
+    code
+)
+    if
+        not card_def or
+        not card_def.package_id or
+        card_def.package_id == ""
+    then
+        return nil
+    end
+
+    return {
+        type = 1,
+        card_id = card_def.package_id,
+        code = code or card_def.code or "*",
+    }
+end
+
+
+local function queue_reward_packet(
+    player_id,
+    rewards,
+    ticks
+)
+    if
+        not rewards or
+        #rewards == 0
+    then
+        return false
+    end
+
+    local delay =
+        math.max(
+            1,
+            math.floor(
+                tonumber(ticks) or
+                POST_UNLOCK_REWARD_DELAY_TICKS
+            )
+        )
+
+    local pending =
+        pending_reward_packets[
+            player_id
+        ]
+
+    if pending then
+        -- Don't overwrite an already queued packet.
+        -- Add the new rewards to it.
+        for _, reward in
+            ipairs(rewards)
+        do
+            pending.rewards[
+                #pending.rewards + 1
+            ] = reward
+        end
+
+        if delay < pending.ticks then
+            pending.ticks = delay
+        end
+    else
+        pending_reward_packets[
+            player_id
+        ] = {
+            ticks = delay,
+            rewards = rewards,
+        }
+    end
+
+    return true
+end
 
 -- ============================================================
 -- PLAYER RUN STATE
@@ -507,6 +587,115 @@ local function provide_card_asset(
     end
 end
 
+local function queue_unlocked_cards_for_current_run(
+    player_id
+)
+    local unlocks,
+          _,
+          active_run =
+        get_current_run_unlocks(
+            player_id
+        )
+
+    if not active_run then
+        return false
+    end
+
+    local area_id =
+        Net.get_player_area(
+            player_id
+        )
+
+    if not area_id then
+        return false
+    end
+
+    local run_id =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_run_id"
+        )
+
+    if
+        not run_id or
+        tostring(run_id) == "" or
+        tostring(run_id) == "pool"
+    then
+        return false
+    end
+
+    run_id =
+        tostring(run_id)
+
+    -- Already restored this run during this connection.
+    -- Normal room-to-room transfers must NOT duplicate cards.
+    if
+        hydrated_run_for_player[
+            player_id
+        ] == run_id
+    then
+        return false
+    end
+
+    local rewards = {}
+
+    for card_key, is_unlocked in
+        pairs(unlocks)
+    do
+        if is_unlocked == true then
+            local card_def =
+                crawler_whitelist.CARDS[
+                    card_key
+                ]
+
+            if card_def then
+                -- Re-send the package itself because the
+                -- connecting client may not have it locally.
+                provide_card_asset(
+                    player_id,
+                    card_def
+                )
+
+                local reward =
+                    build_card_reward_entry(
+                        card_def,
+                        card_def.code
+                    )
+
+                if reward then
+                    rewards[
+                        #rewards + 1
+                    ] = reward
+                end
+            end
+        end
+    end
+
+    -- Mark this even if the player currently owns no unlocked
+    -- chips. Otherwise every room transfer would repeat this scan.
+    hydrated_run_for_player[
+        player_id
+    ] = run_id
+
+    if #rewards > 0 then
+        print(
+            "[crawler_whitelist] restoring " ..
+            tostring(#rewards) ..
+            " unlocked chip(s) for run " ..
+            run_id ..
+            " player " ..
+            tostring(player_id)
+        )
+
+        queue_reward_packet(
+            player_id,
+            rewards,
+            REJOIN_REWARD_DELAY_TICKS
+        )
+    end
+
+    return true
+end
 
 function crawler_whitelist.unlock_card(
     player_id,
@@ -565,6 +754,20 @@ function crawler_whitelist.unlock_card(
         player_id
     )
 
+    local reward =
+        build_card_reward_entry(
+            card_def,
+            card_def.code
+        )
+
+    if reward then
+        queue_reward_packet(
+            player_id,
+            { reward },
+            POST_UNLOCK_REWARD_DELAY_TICKS
+        )
+    end
+
     print(
         "[crawler_whitelist] unlocked " ..
         card_key ..
@@ -584,7 +787,22 @@ end
 function crawler_whitelist.handle_player_join(
     player_id
 )
+    pending_reward_packets[
+        player_id
+    ] = nil
+
+    hydrated_run_for_player[
+        player_id
+    ] = nil
+
     crawler_whitelist.apply_for_player(
+        player_id
+    )
+
+    -- Usually player_join occurs in default.tmx and this does
+    -- nothing. If a player ever joins directly into a valid
+    -- dungeon run, it also handles that case correctly.
+    queue_unlocked_cards_for_current_run(
         player_id
     )
 end
@@ -601,8 +819,15 @@ function crawler_whitelist.handle_player_transfer(
         player_id
     )
 
-    -- ========================================================
-    -- TEMPORARY TEST
+    -- If this is the player's first entry into this active run
+    -- during the current connection, restore all chips they had
+    -- already earned during this run.
+    queue_unlocked_cards_for_current_run(
+        player_id
+    )
+
+-- ========================================================
+-- TEMPORARY TEST
     -- ========================================================
 
     if not DEBUG_UNLOCK_CARD then
@@ -652,5 +877,48 @@ function crawler_whitelist.handle_player_transfer(
     end
 end
 
+function crawler_whitelist.on_tick(
+    delta_time
+)
+    for player_id, packet in
+        pairs(pending_reward_packets)
+    do
+        packet.ticks =
+            packet.ticks - 1
+
+        if packet.ticks <= 0 then
+            local ok, err =
+                pcall(
+                    Net.send_player_battle_rewards,
+                    player_id,
+                    packet.rewards
+                )
+
+            if not ok then
+                print(
+                    "[crawler_whitelist] failed sending chip rewards: " ..
+                    tostring(err)
+                )
+            end
+
+            pending_reward_packets[
+                player_id
+            ] = nil
+        end
+    end
+end
+
+
+function crawler_whitelist.handle_player_disconnect(
+    player_id
+)
+    pending_reward_packets[
+        player_id
+    ] = nil
+
+    hydrated_run_for_player[
+        player_id
+    ] = nil
+end
 
 return crawler_whitelist
