@@ -10,10 +10,10 @@ config.package_path =
 
 
 config.minimum_steps_before_encounter =
-    400
+    50
 
 config.encounter_chance_per_step =
-    0.01
+    0.03
 
 
 -- How many DISTINCT virus/rank entries each generated area

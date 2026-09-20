@@ -247,7 +247,8 @@ local get_battle_reward = function(
         stats.reason ~= 1
     then
         return nil,
-            0
+            0,
+            nil
     end
 
 
@@ -259,7 +260,8 @@ local get_battle_reward = function(
 
     if not source_enemy then
         return nil,
-            0
+            0,
+            nil
     end
 
 
@@ -312,7 +314,13 @@ local get_battle_reward = function(
     end
 
 
-    -- Low-HP recovery overrides chip/money.
+    local recovery_reward =
+        nil
+
+
+    -- Low-HP recovery is an ADDITIONAL reward.
+    --
+    -- It does NOT replace the normal chip-or-money reward.
     if
         persistent_health and
         type(recovery) == "table" and
@@ -338,15 +346,22 @@ local get_battle_reward = function(
                 max_health *
                 threshold
         then
-            return {
-                type =
-                    "hp",
-
-                value =
-                    value,
-            },
-            0
+            recovery_reward = {
+                type = "hp",
+                value = value,
+            }
         end
+    end
+
+
+    local function finish_reward(
+        primary_reward,
+        delay_ticks
+    )
+        return
+            primary_reward,
+            delay_ticks or 0,
+            recovery_reward
     end
 
 
@@ -372,21 +387,26 @@ local get_battle_reward = function(
         )
 
 
-    -- No configured chip means money automatically.
+    -- No chip configured for this virus/rank.
+    --
+    -- This is intentional for viruses that do not have
+    -- an assigned battle chip. They simply award money.
     if not chip_key then
         if money > 0 then
-            return {
-                type =
-                    "money",
-
-                value =
-                    money,
-            },
-            0
+            return finish_reward(
+                {
+                    type = "money",
+                    value = money,
+                },
+                0
+            )
         end
 
-        return nil,
+
+        return finish_reward(
+            nil,
             0
+        )
     end
 
 
@@ -401,40 +421,46 @@ local get_battle_reward = function(
     -- Failed chip roll -> money.
     if math.random() > chip_chance then
         if money > 0 then
-            return {
-                type =
-                    "money",
-
-                value =
-                    money,
-            },
-            0
+            return finish_reward(
+                {
+                    type = "money",
+                    value = money,
+                },
+                0
+            )
         end
 
-        return nil,
+
+        return finish_reward(
+            nil,
             0
+        )
     end
 
 
-    -- Successful chip roll, but duplicates are currently
-    -- unsupported -> money instead.
+    -- Successful chip roll, but duplicate chips are not
+    -- currently supported by ONB.
+    --
+    -- Give the appropriate money reward instead.
     if crawler_whitelist.player_has_card_unlocked(
         player_id,
         chip_key
     ) then
         if money > 0 then
-            return {
-                type =
-                    "money",
-
-                value =
-                    money,
-            },
-            0
+            return finish_reward(
+                {
+                    type = "money",
+                    value = money,
+                },
+                0
+            )
         end
 
-        return nil,
+
+        return finish_reward(
+            nil,
             0
+        )
     end
 
 
@@ -465,8 +491,10 @@ local get_battle_reward = function(
         )
 
 
-        return card_reward,
+        return finish_reward(
+            card_reward,
             delay_ticks or 0
+        )
     end
 
 
@@ -479,19 +507,20 @@ local get_battle_reward = function(
 
 
     if money > 0 then
-        return {
-            type =
-                "money",
-
-            value =
-                money,
-        },
-        0
+        return finish_reward(
+            {
+                type = "money",
+                value = money,
+            },
+            0
+        )
     end
 
 
-    return nil,
+    return finish_reward(
+        nil,
         0
+    )
 end
 
 local normalize_battle_rewards = function (player_id, rewards, stats, persistent_health)
@@ -1381,15 +1410,23 @@ Net:on("battle_results", function(event)
         end
         local rewards = {}
 
-
         local reward,
-              reward_delay_ticks =
+              reward_delay_ticks,
+              recovery_reward =
             get_battle_reward(
                 player_id,
                 player_encounter.encounter_info,
                 event,
                 player_encounter.persistent_health
             )
+
+
+        if recovery_reward then
+            rewards[
+                #rewards + 1
+            ] =
+                recovery_reward
+        end
 
 
         if reward then
@@ -1417,6 +1454,23 @@ Net:on("battle_results", function(event)
                     player_encounter.persistent_health,
                     reward_delay_ticks
                 )
+
+
+                -- The UI reward packet is delayed so newly-provided
+                -- chip assets have time to reach the client.
+                --
+                -- Persistent HP still needs to be saved immediately.
+                if recovery_reward then
+                    recovery =
+                        math.max(
+                            0,
+                            math.floor(
+                                tonumber(
+                                    recovery_reward.value
+                                ) or 0
+                            )
+                        )
+                end
             else
                 recovery =
                     send_battle_rewards(
