@@ -973,7 +973,7 @@ crawler_whitelist.CARDS = {
     },
 
     yoyo1 = {
-        package_id = "com.loui.card.",
+        package_id = "com.loui.card.Yo-Yo1",
         asset_path = "/server/assets/chips/Custom-YoYo1.zip",
         code = "C",
         display_name = "YoYo1",
@@ -984,7 +984,7 @@ crawler_whitelist.CARDS = {
     },
 
     yoyo2 = {
-        package_id = "com.loui.card.",
+        package_id = "com.loui.card.Yo-Yo2",
         asset_path = "/server/assets/chips/Custom-YoYo2.zip",
         code = "H",
         display_name = "YoYo2",
@@ -995,7 +995,7 @@ crawler_whitelist.CARDS = {
     },
 
     yoyo3 = {
-        package_id = "com.loui.card.",
+        package_id = "com.loui.card.Yo-Yo3",
         asset_path = "/server/assets/chips/Custom-YoYo3.zip",
         code = "M",
         display_name = "YoYo3",
@@ -1010,7 +1010,7 @@ crawler_whitelist.CARDS = {
     -- ========================================================
 
     airwheel1 = {
-        package_id = "com.OFC.card.EXE6-13",
+        package_id = "com.OFC.card.EXE6-131-AirWheel1",
         asset_path = "/server/assets/chips/EXE6-AirWheel1.zip",
         code = "F",
         display_name = "AirWheel1",
@@ -1021,7 +1021,7 @@ crawler_whitelist.CARDS = {
     },
 
     airwheel2 = {
-        package_id = "com.OFC.card.EXE6-13",
+        package_id = "com.OFC.card.EXE6-132-AirWheel2",
         asset_path = "/server/assets/chips/EXE6-AirWheel2.zip",
         code = "A",
         display_name = "AirWheel2",
@@ -1032,7 +1032,7 @@ crawler_whitelist.CARDS = {
     },
 
     airwheel3 = {
-        package_id = "com.OFC.card.EXE6-13",
+        package_id = "com.OFC.card.EXE6-133-AirWheel3",
         asset_path = "/server/assets/chips/EXE6-AirWheel3.zip",
         code = "N",
         display_name = "AirWheel3",
@@ -1454,7 +1454,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov10 = {
-        package_id = "com.OFC.card.EXE6-156-Recovery",
+        package_id = "com.OFC.card.EXE6-156-Recovery10",
         asset_path = "/server/assets/chips/EXE6-Recov10.zip",
         code = "A",
         display_name = "Recov10",
@@ -1465,7 +1465,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov120 = {
-        package_id = "com.OFC.card.EXE6-160-Recovery",
+        package_id = "com.OFC.card.EXE6-160-Recovery120",
         asset_path = "/server/assets/chips/EXE6-Recov120.zip",
         code = "F",
         display_name = "Recov120",
@@ -1476,7 +1476,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov150 = {
-        package_id = "com.OFC.card.EXE6-161-Recovery",
+        package_id = "com.OFC.card.EXE6-161-Recovery150",
         asset_path = "/server/assets/chips/EXE6-Recov150.zip",
         code = "J",
         display_name = "Recov150",
@@ -1487,7 +1487,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov200 = {
-        package_id = "com.OFC.card.EXE6-162-Recovery",
+        package_id = "com.OFC.card.EXE6-162-Recovery200",
         asset_path = "/server/assets/chips/EXE6-Recov200.zip",
         code = "I",
         display_name = "Recov200",
@@ -1498,7 +1498,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov30 = {
-        package_id = "com.OFC.card.EXE6-157-Recovery",
+        package_id = "com.OFC.card.EXE6-157-Recovery30",
         asset_path = "/server/assets/chips/EXE6-Recov30.zip",
         code = "E",
         display_name = "Recov30",
@@ -1509,7 +1509,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov300 = {
-        package_id = "com.OFC.card.EXE6-163-Recovery",
+        package_id = "com.OFC.card.EXE6-163-Recovery300",
         asset_path = "/server/assets/chips/EXE6-Recov300.zip",
         code = "J",
         display_name = "Recov300",
@@ -1520,7 +1520,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov50 = {
-        package_id = "com.OFC.card.EXE6-158-Recovery",
+        package_id = "com.OFC.card.EXE6-158-Recovery50",
         asset_path = "/server/assets/chips/EXE6-Recov50.zip",
         code = "C",
         display_name = "Recov50",
@@ -1531,7 +1531,7 @@ crawler_whitelist.CARDS = {
     },
 
     recov80 = {
-        package_id = "com.OFC.card.EXE6-159-Recovery",
+        package_id = "com.OFC.card.EXE6-159-Recovery80",
         asset_path = "/server/assets/chips/EXE6-Recov80.zip",
         code = "H",
         display_name = "Recov80",
@@ -2514,39 +2514,18 @@ local function provide_card_asset(
         not card_def or
         not card_def.asset_path
     then
-        return false
+        return
     end
 
-
     local hint = {
-        AssetType.DATA,
-        PackageType.CARD,
+        asset_type =
+            AssetType.DATA,
+
+        package_type =
+            PackageType.CARD,
     }
 
-
-    print(
-        "[crawler_whitelist][CARD ASSET]" ..
-        " package_id=" ..
-        tostring(
-            card_def.package_id
-        ) ..
-        " path=" ..
-        tostring(
-            card_def.asset_path
-        ) ..
-        " asset_type=" ..
-        tostring(
-            AssetType.DATA
-        ) ..
-        " package_type=" ..
-        tostring(
-            PackageType.CARD
-        )
-    )
-
-
-    local ok,
-          err =
+    local ok, err =
         pcall(
             Net.provide_asset_for_player,
             player_id,
@@ -2554,18 +2533,16 @@ local function provide_card_asset(
             hint
         )
 
+        if not ok then
+            print(
+                "[crawler_whitelist] warning: could not provide card asset: " ..
+                tostring(err)
+            )
 
-    if not ok then
-        print(
-            "[crawler_whitelist] warning: could not provide card asset: " ..
-            tostring(err)
-        )
+            return false
+        end
 
-        return false
-    end
-
-
-    return true
+        return true
 end
 
 local function queue_unlocked_cards_for_current_run(
@@ -2690,7 +2667,7 @@ function crawler_whitelist.restore_unlocked_cards_for_current_run(
     )
 end
 
-function crawler_whitelist.unlock_card_for_battle_reward(
+function crawler_whitelist.prepare_card_for_battle_reward(
     player_id,
     card_key,
     code
@@ -2700,21 +2677,85 @@ function crawler_whitelist.unlock_card_for_battle_reward(
             card_key or ""
         )
 
+    local card_def =
+        crawler_whitelist.CARDS[
+            card_key
+        ]
+
+    if not card_def then
+        return false,
+            "unknown_card",
+            nil,
+            nil
+    end
+
+    local unlocks,
+          _,
+          active_run =
+        get_current_run_unlocks(
+            player_id
+        )
+
+    if not active_run then
+        return false,
+            "not_in_active_run",
+            card_def,
+            nil
+    end
+
+    if unlocks[card_key] then
+        return false,
+            "already_unlocked",
+            card_def,
+            nil
+    end
+
+    local reward =
+        build_card_reward_entry(
+            card_def,
+            code or card_def.code
+        )
+
+    if not reward then
+        return false,
+            "invalid_reward",
+            card_def,
+            nil
+    end
+
+    print(
+        "[crawler_whitelist] prepared battle reward " ..
+        card_key ..
+        " for player " ..
+        tostring(player_id)
+    )
+
+    return true,
+        "ready",
+        card_def,
+        reward
+end
+
+
+function crawler_whitelist.commit_card_after_battle_reward(
+    player_id,
+    card_key
+)
+    card_key =
+        tostring(
+            card_key or ""
+        )
 
     local card_def =
         crawler_whitelist.CARDS[
             card_key
         ]
 
-
     if not card_def then
         return false,
             "unknown_card",
-            nil,
-            nil,
-            0
+            nil
     end
-
 
     local unlocks,
           safe_secret,
@@ -2723,100 +2764,46 @@ function crawler_whitelist.unlock_card_for_battle_reward(
             player_id
         )
 
-
     if not active_run then
         return false,
             "not_in_active_run",
-            card_def,
-            nil,
-            0
+            card_def
     end
-
 
     if unlocks[card_key] then
-        crawler_whitelist.apply_for_player(
-            player_id
-        )
-
-    local whitelist_text =
-        build_player_whitelist_text(
-            player_id
-        )
-
-
-    local package_is_authorized =
-        whitelist_text and
-        whitelist_text:find(
-            card_def.package_id,
-            1,
-            true
-        ) ~= nil
-
-
-    print(
-        "[crawler_whitelist][BATTLE DEBUG]" ..
-        " key=" ..
-        tostring(card_key) ..
-        " package_id=" ..
-        tostring(card_def.package_id) ..
-        " code=" ..
-        tostring(code or card_def.code or "*") ..
-        " asset=" ..
-        tostring(card_def.asset_path) ..
-        " whitelist_contains_package=" ..
-        tostring(package_is_authorized)
-    )
-
         return false,
             "already_unlocked",
-            card_def,
-            nil,
-            0
+            card_def
     end
-
 
     unlocks[
         card_key
     ] =
         true
 
-
     ezmemory.save_player_memory(
         safe_secret
     )
-
 
     provide_card_asset(
         player_id,
         card_def
     )
 
-
     crawler_whitelist.apply_for_player(
         player_id
     )
 
-
-    local reward =
-        build_card_reward_entry(
-            card_def,
-            code or card_def.code
-        )
-
-
     print(
-        "[crawler_whitelist] unlocked battle reward " ..
+        "[crawler_whitelist] committed battle reward " ..
         card_key ..
         " for player " ..
         tostring(player_id)
     )
 
-
     return true,
         "unlocked",
-        card_def,
-        reward,
-        POST_UNLOCK_REWARD_DELAY_TICKS
+        card_def
 end
 
 function crawler_whitelist.unlock_card(

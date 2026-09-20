@@ -356,12 +356,14 @@ local get_battle_reward = function(
 
     local function finish_reward(
         primary_reward,
-        delay_ticks
+        delay_ticks,
+        post_send_chip_key
     )
         return
             primary_reward,
             delay_ticks or 0,
-            recovery_reward
+            recovery_reward,
+            post_send_chip_key
     end
 
 
@@ -464,19 +466,18 @@ local get_battle_reward = function(
     end
 
 
-    local unlocked,
+    local ready,
           reason,
           _,
-          card_reward,
-          delay_ticks =
-        crawler_whitelist.unlock_card_for_battle_reward(
+          card_reward =
+        crawler_whitelist.prepare_card_for_battle_reward(
             player_id,
             chip_key
         )
 
 
     if
-        unlocked and
+        ready and
         card_reward
     then
         print(
@@ -490,10 +491,10 @@ local get_battle_reward = function(
             tostring(tier)
         )
 
-
         return finish_reward(
             card_reward,
-            delay_ticks or 0
+            0,
+            chip_key
         )
     end
 
@@ -634,6 +635,21 @@ end
 local pending_battle_reward_packets =
     {}
 
+local pending_post_reward_unlocks =
+    {}
+
+local queue_post_reward_unlock =
+    function(
+        player_id,
+        card_key
+    )
+        pending_post_reward_unlocks[
+            player_id
+        ] = {
+            ticks = 1,
+            card_key = card_key,
+        }
+    end
 
 local queue_battle_reward_packet =
     function(
@@ -671,40 +687,44 @@ local queue_battle_reward_packet =
     end
 
 
-Net:on(
-    "tick",
-    function()
-        for player_id,
-            packet
-            in pairs(
-                pending_battle_reward_packets
-            )
-        do
-            packet.ticks =
-                packet.ticks - 1
+Net:on("tick", function()
+    for player_id, packet in pairs(pending_battle_reward_packets) do
+        packet.ticks = packet.ticks - 1
 
-
-            if packet.ticks <= 0 then
-                if Net.is_player(
-                    player_id
-                ) then
-                    send_battle_rewards(
-                        player_id,
-                        packet.rewards,
-                        packet.stats,
-                        packet.persistent_health
-                    )
-                end
-
-
-                pending_battle_reward_packets[
-                    player_id
-                ] =
-                    nil
+        if packet.ticks <= 0 then
+            if Net.is_player(player_id) then
+                send_battle_rewards(
+                    player_id,
+                    packet.rewards,
+                    packet.stats,
+                    packet.persistent_health
+                )
             end
+
+            pending_battle_reward_packets[player_id] = nil
         end
     end
-)
+
+    for player_id, packet in pairs(pending_post_reward_unlocks) do
+        packet.ticks = packet.ticks - 1
+
+        if packet.ticks <= 0 then
+            if Net.is_player(player_id) then
+                print(
+                    "[ezencounters][POST REWARD UNLOCK] " ..
+                    tostring(packet.card_key)
+                )
+
+                crawler_whitelist.commit_card_after_battle_reward(
+                    player_id,
+                    packet.card_key
+                )
+            end
+
+            pending_post_reward_unlocks[player_id] = nil
+        end
+    end
+end)
 
 local persist_battle_health = function (player_id, stats, recovery)
     local health = math.floor(tonumber(stats and stats.health) or 0)
@@ -1424,17 +1444,21 @@ end
 
 Net:on("battle_results", function(event)
     local player_id = event.player_id
+
     if players_in_encounters[player_id] then
         local player_encounter = players_in_encounters[player_id]
+
         if encounter_finished_callbacks[player_id] then
             encounter_finished_callbacks[player_id](event)
             encounter_finished_callbacks[player_id] = nil
         end
+
         local rewards = {}
 
         local reward,
               reward_delay_ticks,
-              recovery_reward =
+              recovery_reward,
+              post_send_chip_key =
             get_battle_reward(
                 player_id,
                 player_encounter.encounter_info,
@@ -1442,33 +1466,27 @@ Net:on("battle_results", function(event)
                 player_encounter.persistent_health
             )
 
-
         if recovery_reward then
-            rewards[
-                #rewards + 1
-            ] =
-                recovery_reward
+            rewards[#rewards + 1] = recovery_reward
         end
-
 
         if reward then
-            rewards[
-                #rewards + 1
-            ] =
-                reward
+            rewards[#rewards + 1] = reward
         end
-        if player_encounter.encounter_info.results_callback then
-            player_encounter.encounter_info.results_callback(player_id,player_encounter.encounter_info,event,rewards)
-        end
-        local recovery =
-            0
 
+        if player_encounter.encounter_info.results_callback then
+            player_encounter.encounter_info.results_callback(
+                player_id,
+                player_encounter.encounter_info,
+                event,
+                rewards
+            )
+        end
+
+        local recovery = 0
 
         if #rewards > 0 then
-            if
-                reward_delay_ticks and
-                reward_delay_ticks > 0
-            then
+            if reward_delay_ticks and reward_delay_ticks > 0 then
                 queue_battle_reward_packet(
                     player_id,
                     rewards,
@@ -1477,38 +1495,45 @@ Net:on("battle_results", function(event)
                     reward_delay_ticks
                 )
 
-
-                -- The UI reward packet is delayed so newly-provided
-                -- chip assets have time to reach the client.
-                --
-                -- Persistent HP still needs to be saved immediately.
                 if recovery_reward then
-                    recovery =
-                        math.max(
-                            0,
-                            math.floor(
-                                tonumber(
-                                    recovery_reward.value
-                                ) or 0
-                            )
+                    recovery = math.max(
+                        0,
+                        math.floor(
+                            tonumber(recovery_reward.value) or 0
                         )
+                    )
                 end
             else
-                recovery =
-                    send_battle_rewards(
-                        player_id,
-                        rewards,
-                        event,
-                        player_encounter.persistent_health
-                    )
+                recovery = send_battle_rewards(
+                    player_id,
+                    rewards,
+                    event,
+                    player_encounter.persistent_health
+                )
             end
         end
-        if player_encounter.persistent_health then
-            persist_battle_health(player_id, event, recovery)
+
+        -- The battle reward has now been sent/queued.
+        -- For chip rewards using the new ordering test, unlock and
+        -- provide the package on the following server tick.
+        if post_send_chip_key then
+            queue_post_reward_unlock(
+                player_id,
+                post_send_chip_key
+            )
         end
+
+        if player_encounter.persistent_health then
+            persist_battle_health(
+                player_id,
+                event,
+                recovery
+            )
+        end
+
         players_in_encounters[player_id] = nil
     end
-    -- stats = { health: number, score: number, time: number, reason: number, emotion: number, turns: number, enemies: { id: String, health: number }[] }
+
     ezbus:emit("encounter_finished", {
         player_id = player_id,
         stats = {
@@ -1528,6 +1553,7 @@ ezencounters.handle_player_transfer = ezencounters.clear_last_position
 ezencounters.handle_player_disconnect = function (player_id)
     encounter_finished_callbacks[player_id] = nil
 	pending_battle_reward_packets[player_id] = nil
+    pending_post_reward_unlocks[player_id] = nil
     ezencounters.clear_last_position(player_id)
 end
 
