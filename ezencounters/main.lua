@@ -566,6 +566,14 @@ local function get_or_create_crawler_area_table(area_id)
         return nil
     end
 
+    local package_path = crawler_encounter_config.package_paths and
+        crawler_encounter_config.package_paths[difficulty]
+
+    if not package_path then
+        print("[ezencounters][crawler] missing package path for " .. tostring(difficulty))
+        return nil
+    end
+
     local reward_tier = Net.get_area_custom_property(area_id, "dungeon_reward_tier")
 
     if reward_tier ~= "easy" and reward_tier ~= "medium" and reward_tier ~= "hard" then
@@ -587,13 +595,14 @@ local function get_or_create_crawler_area_table(area_id)
         crawler_random = true,
         crawler_difficulty = difficulty,
         crawler_reward_tier = reward_tier,
+        crawler_package_path = package_path,
         crawler_pool = area_pool,
         encounters = {},
     }
 
     area_encounter_tables[area_id] = encounter_table
 
-    Net.provide_asset(area_id, crawler_encounter_config.package_path)
+    Net.provide_asset(area_id, package_path)
 
     print(
         "[ezencounters][crawler] created " ..
@@ -625,7 +634,7 @@ local function build_crawler_random_encounter(area_id, encounter_table)
                     tostring(area_id) ..
                     "_" ..
                     tostring(math.random(1000000)),
-                path = crawler_encounter_config.package_path,
+                path = encounter_table.crawler_package_path,
                 enemies = {{ name = boss.name, rank = boss.rank, },},
                 positions = crawler_build_positions(1),
                 _crawler_reward_tier = "hard",
@@ -661,7 +670,7 @@ local function build_crawler_random_encounter(area_id, encounter_table)
             tostring(area_id) ..
             "_" ..
             tostring(math.random(1000000)),
-        path = crawler_encounter_config.package_path,
+        path = encounter_table.crawler_package_path,
         enemies = enemies,
         positions = crawler_build_positions(#enemies),
         _crawler_reward_tier = encounter_table.crawler_reward_tier,
