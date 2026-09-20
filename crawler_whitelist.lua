@@ -1937,7 +1937,7 @@ end
 
 local cached_whitelist = {}
 
-local POST_UNLOCK_REWARD_DELAY_TICKS = 20
+local POST_UNLOCK_REWARD_DELAY_TICKS = 0
 local REJOIN_REWARD_DELAY_TICKS = 20
 
 local pending_reward_packets = {}
