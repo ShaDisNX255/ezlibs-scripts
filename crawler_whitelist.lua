@@ -2656,6 +2656,106 @@ function crawler_whitelist.restore_unlocked_cards_for_current_run(
     )
 end
 
+function crawler_whitelist.unlock_card_for_battle_reward(
+    player_id,
+    card_key,
+    code
+)
+    card_key =
+        tostring(
+            card_key or ""
+        )
+
+
+    local card_def =
+        crawler_whitelist.CARDS[
+            card_key
+        ]
+
+
+    if not card_def then
+        return false,
+            "unknown_card",
+            nil,
+            nil,
+            0
+    end
+
+
+    local unlocks,
+          safe_secret,
+          active_run =
+        get_current_run_unlocks(
+            player_id
+        )
+
+
+    if not active_run then
+        return false,
+            "not_in_active_run",
+            card_def,
+            nil,
+            0
+    end
+
+
+    if unlocks[card_key] then
+        crawler_whitelist.apply_for_player(
+            player_id
+        )
+
+        return false,
+            "already_unlocked",
+            card_def,
+            nil,
+            0
+    end
+
+
+    unlocks[
+        card_key
+    ] =
+        true
+
+
+    ezmemory.save_player_memory(
+        safe_secret
+    )
+
+
+    provide_card_asset(
+        player_id,
+        card_def
+    )
+
+
+    crawler_whitelist.apply_for_player(
+        player_id
+    )
+
+
+    local reward =
+        build_card_reward_entry(
+            card_def,
+            code or card_def.code
+        )
+
+
+    print(
+        "[crawler_whitelist] unlocked battle reward " ..
+        card_key ..
+        " for player " ..
+        tostring(player_id)
+    )
+
+
+    return true,
+        "unlocked",
+        card_def,
+        reward,
+        POST_UNLOCK_REWARD_DELAY_TICKS
+end
+
 function crawler_whitelist.unlock_card(
     player_id,
     card_key

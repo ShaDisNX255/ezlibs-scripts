@@ -5,6 +5,15 @@ local eztriggers = require('scripts/ezlibs-scripts/eztriggers')
 local object_registry = require('scripts/ezlibs-scripts/object_registry')
 local ezbus = require('scripts/ezlibs-scripts/ezbus')
 local ezconfig = require('scripts/ezlibs-scripts/ezconfig')
+local crawler_whitelist =
+    require(
+        'scripts/ezlibs-scripts/crawler_whitelist'
+    )
+
+local crawler_encounter_config =
+    require(
+        'scripts/ezlibs-scripts/crawler_encounter_config'
+    )
 
 local ezencounters = {}
 local players_in_encounters = {}
@@ -35,85 +44,454 @@ local battle_reward_types = {
     bugfrags = 3,
 }
 
-local get_reward_tier = function (score)
-    score = tonumber(score) or 0
+local get_reward_tier = function(
+    score
+)
+    score =
+        tonumber(score) or 0
+
     if score >= 9 then
-        return 'high'
+        return "high"
     end
+
     if score >= 5 then
-        return 'mid'
+        return "mid"
     end
-    return 'low'
+
+    return "low"
 end
 
-local get_enemy_reward_table = function (enemy)
-    if not battle_rewards or not enemy then
+
+local get_enemy_reward_table = function(
+    enemy
+)
+    if
+        not battle_rewards or
+        not enemy
+    then
         return nil
     end
-    local enemy_rewards = battle_rewards[enemy.name]
-    if type(enemy_rewards) ~= 'table' then
+
+
+    local drops =
+        battle_rewards.drops or
+        battle_rewards
+
+
+    local enemy_rewards =
+        drops[
+            enemy.name
+        ]
+
+
+    if type(enemy_rewards) ~= "table" then
         return nil
     end
-    return enemy_rewards[enemy.rank] or enemy_rewards[tostring(enemy.rank)]
+
+
+    return
+        enemy_rewards[
+            enemy.rank
+        ] or
+        enemy_rewards[
+            tostring(
+                enemy.rank
+            )
+        ]
 end
 
-local pick_reward_table = function (encounter_info)
+
+local pick_reward_enemy = function(
+    encounter_info
+)
     local candidates = {}
-    for _, enemy in ipairs((encounter_info and encounter_info.enemies) or {}) do
-        local reward_table = get_enemy_reward_table(enemy)
-        if type(reward_table) == 'table' then
-            candidates[#candidates + 1] = reward_table
+
+
+    for _, enemy in ipairs(
+        (
+            encounter_info and
+            encounter_info.enemies
+        ) or {}
+    )
+    do
+        if
+            type(enemy) == "table" and
+            tonumber(
+                enemy.team or 1
+            ) ~= 2
+        then
+            candidates[
+                #candidates + 1
+            ] =
+                enemy
         end
     end
+
+
     if #candidates == 0 then
         return nil
     end
-    return candidates[math.random(#candidates)]
+
+
+    return candidates[
+        math.random(
+            #candidates
+        )
+    ]
 end
 
-local copy_reward = function (reward)
-    local copy = {}
-    for key, value in pairs(reward or {}) do
-        copy[key] = value
-    end
-    return copy
-end
 
-local get_battle_reward = function (player_id, encounter_info, stats, persistent_health)
-    if not battle_rewards or not stats or stats.reason ~= 1 then
-        return nil
-    end
+local get_money_value = function(
+    reward_table,
+    difficulty,
+    tier
+)
+    if
+        reward_table and
+        type(
+            reward_table.money
+        ) == "table"
+    then
+        local value =
+            tonumber(
+                reward_table.money[
+                    tier
+                ]
+            )
 
-    local reward_table = pick_reward_table(encounter_info)
-    if not reward_table then
-        return nil
-    end
-
-    local health = tonumber(stats.health) or 0
-    local max_health = tonumber(Net.get_player_max_health(player_id)) or 0
-    local recovery = reward_table.low_hp_recovery
-
-    if persistent_health and type(recovery) == 'table' and max_health > 0 then
-        local threshold = tonumber(recovery.threshold) or 0.375
-        local value = math.floor(tonumber(recovery.value) or 0)
-        if value > 0 and health < max_health * threshold then
-            return {
-                type = 'hp',
-                value = value,
-            }
+        if value then
+            return math.floor(
+                value
+            )
         end
     end
 
-    local tier = get_reward_tier(stats.score)
-    local reward = reward_table[tier]
-    if type(reward) ~= 'table' then
-        return nil
-    end
-    if reward.type == 'hp' and not persistent_health then
-        return nil
+
+    local money_cfg =
+        battle_rewards and
+        battle_rewards.money
+
+
+    local difficulty_cfg =
+        money_cfg and
+        money_cfg[
+            difficulty
+        ]
+
+
+    return math.floor(
+        tonumber(
+            difficulty_cfg and
+            difficulty_cfg[
+                tier
+            ]
+        ) or 0
+    )
+end
+
+
+local get_chip_chance = function(
+    reward_table,
+    difficulty,
+    tier
+)
+    if
+        reward_table and
+        type(
+            reward_table.chip_chances
+        ) == "table"
+    then
+        local override =
+            tonumber(
+                reward_table.chip_chances[
+                    tier
+                ]
+            )
+
+        if override then
+            return override
+        end
     end
 
-    return copy_reward(reward)
+
+    local chances =
+        battle_rewards and
+        battle_rewards.chip_chances
+
+
+    local difficulty_chances =
+        chances and
+        chances[
+            difficulty
+        ]
+
+
+    return tonumber(
+        difficulty_chances and
+        difficulty_chances[
+            tier
+        ]
+    ) or 0
+end
+
+
+local get_battle_reward = function(
+    player_id,
+    encounter_info,
+    stats,
+    persistent_health
+)
+    if
+        not battle_rewards or
+        not stats or
+        stats.reason ~= 1
+    then
+        return nil,
+            0
+    end
+
+
+    local source_enemy =
+        pick_reward_enemy(
+            encounter_info
+        )
+
+
+    if not source_enemy then
+        return nil,
+            0
+    end
+
+
+    local reward_table =
+        get_enemy_reward_table(
+            source_enemy
+        )
+
+
+    local difficulty =
+        (
+            reward_table and
+            reward_table.difficulty
+        ) or
+        (
+            encounter_info and
+            encounter_info._crawler_reward_tier
+        ) or
+        "easy"
+
+
+    if difficulty == "boss" then
+        difficulty =
+            "hard"
+    end
+
+
+    local health =
+        tonumber(
+            stats.health
+        ) or 0
+
+
+    local max_health =
+        tonumber(
+            Net.get_player_max_health(
+                player_id
+            )
+        ) or 0
+
+
+    local recovery =
+        reward_table and
+        reward_table.low_hp_recovery
+
+
+    if not recovery then
+        recovery =
+            battle_rewards.low_hp_recovery
+    end
+
+
+    -- Low-HP recovery overrides chip/money.
+    if
+        persistent_health and
+        type(recovery) == "table" and
+        max_health > 0
+    then
+        local threshold =
+            tonumber(
+                recovery.threshold
+            ) or 0.375
+
+
+        local value =
+            math.floor(
+                tonumber(
+                    recovery.value
+                ) or 0
+            )
+
+
+        if
+            value > 0 and
+            health <
+                max_health *
+                threshold
+        then
+            return {
+                type =
+                    "hp",
+
+                value =
+                    value,
+            },
+            0
+        end
+    end
+
+
+    local tier =
+        get_reward_tier(
+            stats.score
+        )
+
+
+    local money =
+        get_money_value(
+            reward_table,
+            difficulty,
+            tier
+        )
+
+
+    local chip_key =
+        reward_table and
+        (
+            reward_table.chip or
+            reward_table.card
+        )
+
+
+    -- No configured chip means money automatically.
+    if not chip_key then
+        if money > 0 then
+            return {
+                type =
+                    "money",
+
+                value =
+                    money,
+            },
+            0
+        end
+
+        return nil,
+            0
+    end
+
+
+    local chip_chance =
+        get_chip_chance(
+            reward_table,
+            difficulty,
+            tier
+        )
+
+
+    -- Failed chip roll -> money.
+    if math.random() > chip_chance then
+        if money > 0 then
+            return {
+                type =
+                    "money",
+
+                value =
+                    money,
+            },
+            0
+        end
+
+        return nil,
+            0
+    end
+
+
+    -- Successful chip roll, but duplicates are currently
+    -- unsupported -> money instead.
+    if crawler_whitelist.player_has_card_unlocked(
+        player_id,
+        chip_key
+    ) then
+        if money > 0 then
+            return {
+                type =
+                    "money",
+
+                value =
+                    money,
+            },
+            0
+        end
+
+        return nil,
+            0
+    end
+
+
+    local unlocked,
+          reason,
+          _,
+          card_reward,
+          delay_ticks =
+        crawler_whitelist.unlock_card_for_battle_reward(
+            player_id,
+            chip_key
+        )
+
+
+    if
+        unlocked and
+        card_reward
+    then
+        print(
+            "[ezencounters] battle chip drop " ..
+            tostring(chip_key) ..
+            " from " ..
+            tostring(source_enemy.name) ..
+            " rank=" ..
+            tostring(source_enemy.rank) ..
+            " tier=" ..
+            tostring(tier)
+        )
+
+
+        return card_reward,
+            delay_ticks or 0
+    end
+
+
+    print(
+        "[ezencounters] chip reward fallback to money: " ..
+        tostring(chip_key) ..
+        " reason=" ..
+        tostring(reason)
+    )
+
+
+    if money > 0 then
+        return {
+            type =
+                "money",
+
+            value =
+                money,
+        },
+        0
+    end
+
+
+    return nil,
+        0
 end
 
 local normalize_battle_rewards = function (player_id, rewards, stats, persistent_health)
@@ -202,6 +580,81 @@ local send_battle_rewards = function (player_id, rewards, stats, persistent_heal
     return recovery
 end
 
+local pending_battle_reward_packets =
+    {}
+
+
+local queue_battle_reward_packet =
+    function(
+        player_id,
+        rewards,
+        stats,
+        persistent_health,
+        ticks
+    )
+        pending_battle_reward_packets[
+            player_id
+        ] = {
+            ticks =
+                math.max(
+                    1,
+                    math.floor(
+                        tonumber(
+                            ticks
+                        ) or 1
+                    )
+                ),
+
+            rewards =
+                rewards,
+
+            stats = {
+                health =
+                    stats and
+                    stats.health or 0,
+            },
+
+            persistent_health =
+                persistent_health,
+        }
+    end
+
+
+Net:on(
+    "tick",
+    function()
+        for player_id,
+            packet
+            in pairs(
+                pending_battle_reward_packets
+            )
+        do
+            packet.ticks =
+                packet.ticks - 1
+
+
+            if packet.ticks <= 0 then
+                if Net.is_player(
+                    player_id
+                ) then
+                    send_battle_rewards(
+                        player_id,
+                        packet.rewards,
+                        packet.stats,
+                        packet.persistent_health
+                    )
+                end
+
+
+                pending_battle_reward_packets[
+                    player_id
+                ] =
+                    nil
+            end
+        end
+    end
+)
+
 local persist_battle_health = function (player_id, stats, recovery)
     local health = math.floor(tonumber(stats and stats.health) or 0)
     local max_health = tonumber(Net.get_player_max_health(player_id)) or health
@@ -239,6 +692,514 @@ end
 
 local area_encounter_tables = load_encounters_for_areas()
 
+-- ============================================================
+-- CRAWLER RANDOM ENCOUNTERS
+-- ============================================================
+
+local CRAWLER_ENEMY_CELLS = {
+    {x=4,y=1},
+    {x=5,y=1},
+    {x=6,y=1},
+
+    {x=4,y=2},
+    {x=5,y=2},
+    {x=6,y=2},
+
+    {x=4,y=3},
+    {x=5,y=3},
+    {x=6,y=3},
+}
+
+
+local function crawler_shuffle(
+    list
+)
+    for i = #list, 2, -1 do
+        local j =
+            math.random(i)
+
+        list[i],
+        list[j] =
+            list[j],
+            list[i]
+    end
+
+    return list
+end
+
+
+local function crawler_pick_distinct(
+    source,
+    count
+)
+    local copy = {}
+
+
+    for index,
+        value
+        in ipairs(source or {})
+    do
+        copy[index] =
+            value
+    end
+
+
+    crawler_shuffle(
+        copy
+    )
+
+
+    local out = {}
+
+
+    for i = 1,
+        math.min(
+            count,
+            #copy
+        )
+    do
+        out[
+            #out + 1
+        ] =
+            copy[i]
+    end
+
+
+    return out
+end
+
+
+local function crawler_blank_positions()
+    return {
+        {0,0,0,0,0,0},
+        {0,0,0,0,0,0},
+        {0,0,0,0,0,0},
+    }
+end
+
+
+local function crawler_get_master_pool(
+    difficulty
+)
+    if difficulty == "easy" then
+        return crawler_encounter_config.easy_pool
+    end
+
+
+    if difficulty == "medium" then
+        return crawler_encounter_config.medium_pool
+    end
+
+
+    -- Boss territory uses the Hard normal-virus universe.
+    if
+        difficulty == "hard" or
+        difficulty == "boss"
+    then
+        return crawler_encounter_config.hard_pool
+    end
+
+
+    return nil
+end
+
+
+local function crawler_create_area_pool(
+    difficulty
+)
+    local master_pool =
+        crawler_get_master_pool(
+            difficulty
+        )
+
+
+    if
+        not master_pool or
+        #master_pool == 0
+    then
+        return {}
+    end
+
+
+    local pool_size =
+        crawler_encounter_config.area_pool_size[
+            difficulty
+        ] or 7
+
+
+    return crawler_pick_distinct(
+        master_pool,
+        pool_size
+    )
+end
+
+
+local function crawler_build_positions(
+    enemy_count
+)
+    local positions =
+        crawler_blank_positions()
+
+
+    local cells =
+        crawler_pick_distinct(
+            CRAWLER_ENEMY_CELLS,
+            enemy_count
+        )
+
+
+    for index,
+        cell
+        in ipairs(cells)
+    do
+        positions[
+            cell.y
+        ][
+            cell.x
+        ] =
+            index
+    end
+
+
+    return positions
+end
+
+
+local function crawler_pool_to_string(
+    pool
+)
+    local parts = {}
+
+
+    for _, enemy in
+        ipairs(pool or {})
+    do
+        parts[
+            #parts + 1
+        ] =
+            tostring(
+                enemy.name
+            ) ..
+            "[" ..
+            tostring(
+                enemy.rank
+            ) ..
+            "]"
+    end
+
+
+    return table.concat(
+        parts,
+        ", "
+    )
+end
+
+
+local function get_or_create_crawler_area_table(
+    area_id
+)
+    if not area_id then
+        return nil
+    end
+
+
+    if area_encounter_tables[
+        area_id
+    ] then
+        return area_encounter_tables[
+            area_id
+        ]
+    end
+
+
+    local run_id =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_run_id"
+        )
+
+
+    if
+        not run_id or
+        tostring(run_id) == "" or
+        tostring(run_id) == "pool"
+    then
+        return nil
+    end
+
+
+    local room_type =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_room_type"
+        )
+
+
+    -- Rest areas remain safe.
+    if room_type == "lobby" then
+        return nil
+    end
+
+
+    local difficulty =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_difficulty"
+        )
+
+
+    if
+        difficulty ~= "easy" and
+        difficulty ~= "medium" and
+        difficulty ~= "hard" and
+        difficulty ~= "boss"
+    then
+        return nil
+    end
+
+
+    local reward_tier =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_reward_tier"
+        )
+
+
+    if
+        reward_tier ~= "easy" and
+        reward_tier ~= "medium" and
+        reward_tier ~= "hard"
+    then
+        reward_tier =
+            difficulty == "boss"
+                and "hard"
+                or difficulty
+    end
+
+
+    local area_pool =
+        crawler_create_area_pool(
+            difficulty
+        )
+
+
+    if #area_pool == 0 then
+        return nil
+    end
+
+
+    local encounter_table = {
+        persistent_health =
+            true,
+
+        minimum_steps_before_encounter =
+            crawler_encounter_config.minimum_steps_before_encounter,
+
+        encounter_chance_per_step =
+            crawler_encounter_config.encounter_chance_per_step,
+
+        crawler_random =
+            true,
+
+        crawler_difficulty =
+            difficulty,
+
+        crawler_reward_tier =
+            reward_tier,
+
+        crawler_pool =
+            area_pool,
+
+        encounters =
+            {},
+    }
+
+
+    area_encounter_tables[
+        area_id
+    ] =
+        encounter_table
+
+
+    Net.provide_asset(
+        area_id,
+        crawler_encounter_config.package_path
+    )
+
+
+    print(
+        "[ezencounters][crawler] created " ..
+        tostring(difficulty) ..
+        " encounter pool for " ..
+        tostring(area_id) ..
+        ": " ..
+        crawler_pool_to_string(
+            area_pool
+        )
+    )
+
+
+    return encounter_table
+end
+
+
+local function build_crawler_random_encounter(
+    area_id,
+    encounter_table
+)
+    local difficulty =
+        encounter_table.crawler_difficulty
+
+
+    -- --------------------------------------------------------
+    -- BOSS ROLL
+    -- --------------------------------------------------------
+
+    if
+        difficulty == "boss" and
+        math.random() <
+            crawler_encounter_config.boss_chance
+    then
+        local boss_pool =
+            crawler_encounter_config.boss_pool
+
+
+        if
+            boss_pool and
+            #boss_pool > 0
+        then
+            local boss =
+                boss_pool[
+                    math.random(
+                        #boss_pool
+                    )
+                ]
+
+
+            return {
+                name =
+                    "CrawlerBoss_" ..
+                    tostring(area_id) ..
+                    "_" ..
+                    tostring(
+                        math.random(
+                            1000000
+                        )
+                    ),
+
+                path =
+                    crawler_encounter_config.package_path,
+
+                enemies = {
+                    {
+                        name =
+                            boss.name,
+
+                        rank =
+                            boss.rank,
+                    },
+                },
+
+                positions =
+                    crawler_build_positions(
+                        1
+                    ),
+
+                _crawler_reward_tier =
+                    "hard",
+
+                _crawler_boss =
+                    true,
+            }
+        end
+    end
+
+
+    -- --------------------------------------------------------
+    -- NORMAL VIRUS ENCOUNTER
+    -- --------------------------------------------------------
+
+    local count_cfg =
+        crawler_encounter_config.enemy_count[
+            difficulty
+        ]
+
+
+    if not count_cfg then
+        return nil
+    end
+
+
+    local enemy_count =
+        math.random(
+            count_cfg.min,
+            count_cfg.max
+        )
+
+
+    enemy_count =
+        math.min(
+            enemy_count,
+            #encounter_table.crawler_pool,
+            #CRAWLER_ENEMY_CELLS
+        )
+
+
+    local chosen =
+        crawler_pick_distinct(
+            encounter_table.crawler_pool,
+            enemy_count
+        )
+
+
+    local enemies = {}
+
+
+    for _, enemy in
+        ipairs(chosen)
+    do
+        enemies[
+            #enemies + 1
+        ] = {
+            name =
+                enemy.name,
+
+            rank =
+                enemy.rank,
+        }
+    end
+
+
+    return {
+        name =
+            "CrawlerRandom_" ..
+            tostring(area_id) ..
+            "_" ..
+            tostring(
+                math.random(
+                    1000000
+                )
+            ),
+
+        path =
+            crawler_encounter_config.package_path,
+
+        enemies =
+            enemies,
+
+        positions =
+            crawler_build_positions(
+                #enemies
+            ),
+
+        _crawler_reward_tier =
+            encounter_table.crawler_reward_tier,
+
+        _crawler_boss =
+            false,
+    }
+end
+
 local function should_record_step(player_id)
     local player_area = Net.get_player_area(player_id)
     if not player_last_position[player_id] then
@@ -267,7 +1228,13 @@ ezencounters.increment_steps_since_encounter = function (player_id)
         return
     end
     local player_area = Net.get_player_area(player_id)
-    local encounter_table = area_encounter_tables[player_area]
+    local encounter_table =
+        area_encounter_tables[
+            player_area
+        ] or
+        get_or_create_crawler_area_table(
+            player_area
+        )
     if not player_steps_since_encounter[player_id] then
         player_steps_since_encounter[player_id] = 1
     else
@@ -312,12 +1279,52 @@ ezencounters.pick_encounter_from_table = function (encounter_table)
     return encounter_table.encounters[1]
 end
 
-ezencounters.try_random_encounter = function (player_id,encounter_table)
-    if math.random() <= encounter_table.encounter_chance_per_step then
-        local encounter_info = ezencounters.pick_encounter_from_table(encounter_table)
-        ezencounters.begin_encounter(player_id, encounter_info)
+ezencounters.try_random_encounter =
+    function(
+        player_id,
+        encounter_table
+    )
+        if
+            math.random() >
+            encounter_table.encounter_chance_per_step
+        then
+            return
+        end
+
+
+        local encounter_info
+
+
+        if encounter_table.crawler_random then
+            local player_area =
+                Net.get_player_area(
+                    player_id
+                )
+
+
+            encounter_info =
+                build_crawler_random_encounter(
+                    player_area,
+                    encounter_table
+                )
+        else
+            encounter_info =
+                ezencounters.pick_encounter_from_table(
+                    encounter_table
+                )
+        end
+
+
+        if not encounter_info then
+            return
+        end
+
+
+        ezencounters.begin_encounter(
+            player_id,
+            encounter_info
+        )
     end
-end
 
 -- FIXED: Now returns the stats
 ezencounters.begin_encounter_by_name = function(player_id,encounter_name,trigger_object)
@@ -373,14 +1380,53 @@ Net:on("battle_results", function(event)
             encounter_finished_callbacks[player_id] = nil
         end
         local rewards = {}
-        local reward = get_battle_reward(player_id, player_encounter.encounter_info, event, player_encounter.persistent_health)
+
+
+        local reward,
+              reward_delay_ticks =
+            get_battle_reward(
+                player_id,
+                player_encounter.encounter_info,
+                event,
+                player_encounter.persistent_health
+            )
+
+
         if reward then
-            rewards[#rewards + 1] = reward
+            rewards[
+                #rewards + 1
+            ] =
+                reward
         end
         if player_encounter.encounter_info.results_callback then
             player_encounter.encounter_info.results_callback(player_id,player_encounter.encounter_info,event,rewards)
         end
-        local recovery = send_battle_rewards(player_id, rewards, event, player_encounter.persistent_health)
+        local recovery =
+            0
+
+
+        if #rewards > 0 then
+            if
+                reward_delay_ticks and
+                reward_delay_ticks > 0
+            then
+                queue_battle_reward_packet(
+                    player_id,
+                    rewards,
+                    event,
+                    player_encounter.persistent_health,
+                    reward_delay_ticks
+                )
+            else
+                recovery =
+                    send_battle_rewards(
+                        player_id,
+                        rewards,
+                        event,
+                        player_encounter.persistent_health
+                    )
+            end
+        end
         if player_encounter.persistent_health then
             persist_battle_health(player_id, event, recovery)
         end
@@ -405,6 +1451,7 @@ ezencounters.handle_player_transfer = ezencounters.clear_last_position
 
 ezencounters.handle_player_disconnect = function (player_id)
     encounter_finished_callbacks[player_id] = nil
+	pending_battle_reward_packets[player_id] = nil
     ezencounters.clear_last_position(player_id)
 end
 
