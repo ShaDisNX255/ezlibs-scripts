@@ -1937,7 +1937,7 @@ end
 
 local cached_whitelist = {}
 
-local POST_UNLOCK_REWARD_DELAY_TICKS = 0
+local POST_UNLOCK_REWARD_DELAY_TICKS = 20
 local REJOIN_REWARD_DELAY_TICKS = 20
 
 local pending_reward_packets = {}
@@ -2514,18 +2514,39 @@ local function provide_card_asset(
         not card_def or
         not card_def.asset_path
     then
-        return
+        return false
     end
 
-    local hint = {
-        asset_type =
-            AssetType.DATA,
 
-        package_type =
-            PackageType.CARD,
+    local hint = {
+        AssetType.DATA,
+        PackageType.CARD,
     }
 
-    local ok, err =
+
+    print(
+        "[crawler_whitelist][CARD ASSET]" ..
+        " package_id=" ..
+        tostring(
+            card_def.package_id
+        ) ..
+        " path=" ..
+        tostring(
+            card_def.asset_path
+        ) ..
+        " asset_type=" ..
+        tostring(
+            AssetType.DATA
+        ) ..
+        " package_type=" ..
+        tostring(
+            PackageType.CARD
+        )
+    )
+
+
+    local ok,
+          err =
         pcall(
             Net.provide_asset_for_player,
             player_id,
@@ -2533,12 +2554,18 @@ local function provide_card_asset(
             hint
         )
 
+
     if not ok then
         print(
             "[crawler_whitelist] warning: could not provide card asset: " ..
             tostring(err)
         )
+
+        return false
     end
+
+
+    return true
 end
 
 local function queue_unlocked_cards_for_current_run(
