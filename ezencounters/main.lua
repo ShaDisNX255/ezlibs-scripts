@@ -594,9 +594,31 @@ local send_battle_rewards = function (player_id, rewards, stats, persistent_heal
         current_fragments = ezmemory.get_player_fragments(player_id)
     end
 
-    if #native_rewards > 0 then
-        Net.send_player_battle_rewards(player_id, native_rewards)
+if #native_rewards > 0 then
+    for index, reward in
+        ipairs(native_rewards)
+    do
+        print(
+            "[ezencounters][REWARD DEBUG]" ..
+            " index=" ..
+            tostring(index) ..
+            " type=" ..
+            tostring(reward.type) ..
+            " card_id=" ..
+            tostring(reward.card_id) ..
+            " code=" ..
+            tostring(reward.code) ..
+            " value=" ..
+            tostring(reward.value)
+        )
     end
+
+
+    Net.send_player_battle_rewards(
+        player_id,
+        native_rewards
+    )
+end
 
     if current_money ~= nil then
         ezmemory.set_player_money(player_id, current_money + money)

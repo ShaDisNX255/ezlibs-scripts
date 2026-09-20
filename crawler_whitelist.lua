@@ -2382,6 +2382,13 @@ function crawler_whitelist.apply_for_player(
             player_id
         )
 
+    if text then
+        print(
+            "[crawler_whitelist][DEBUG] generated whitelist for player " ..
+            tostring(player_id)
+        )
+    end
+
     if not text then
         return false
     end
@@ -2703,6 +2710,35 @@ function crawler_whitelist.unlock_card_for_battle_reward(
         crawler_whitelist.apply_for_player(
             player_id
         )
+
+    local whitelist_text =
+        build_player_whitelist_text(
+            player_id
+        )
+
+
+    local package_is_authorized =
+        whitelist_text and
+        whitelist_text:find(
+            card_def.package_id,
+            1,
+            true
+        ) ~= nil
+
+
+    print(
+        "[crawler_whitelist][BATTLE DEBUG]" ..
+        " key=" ..
+        tostring(card_key) ..
+        " package_id=" ..
+        tostring(card_def.package_id) ..
+        " code=" ..
+        tostring(code or card_def.code or "*") ..
+        " asset=" ..
+        tostring(card_def.asset_path) ..
+        " whitelist_contains_package=" ..
+        tostring(package_is_authorized)
+    )
 
         return false,
             "already_unlocked",
