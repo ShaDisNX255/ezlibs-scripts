@@ -1565,6 +1565,27 @@ local function provide_card_asset(player_id, card_def)
     return true
 end
 
+function crawler_whitelist.provide_card_asset_for_player(player_id, card_key)
+    local card_def = crawler_whitelist.get_card_def(card_key)
+
+    if not card_def then
+        return false
+    end
+
+    local ok = provide_card_asset(player_id, card_def)
+
+    if ok then
+        print(
+            "[crawler_whitelist][PRELOAD CARD] " ..
+            tostring(card_key) ..
+            " package_id=" ..
+            tostring(card_def.package_id)
+        )
+    end
+
+    return ok
+end
+
 local function queue_unlocked_cards_for_current_run(player_id)
     local unlocks, _, active_run = get_current_run_unlocks(player_id)
 

@@ -11,8 +11,8 @@ config.package_paths = {
     boss = "/server/assets/ezlibs-assets/ezencounters/optimized/hard.zip",
 }
 
-config.minimum_steps_before_encounter = 400
-config.encounter_chance_per_step = 0.01
+config.minimum_steps_before_encounter = 50
+config.encounter_chance_per_step = 0.03
 
 config.area_pool_size = {
     easy = 7,

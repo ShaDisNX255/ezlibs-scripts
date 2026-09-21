@@ -67,6 +67,22 @@ local get_enemy_reward_table = function(enemy)
         enemy_rewards[tostring(enemy.rank)]
 end
 
+local preprovide_encounter_chip_assets = function(player_id, encounter_info)
+    local provided = {}
+
+    for _, enemy in ipairs((encounter_info and encounter_info.enemies) or {}) do
+        if type(enemy) == "table" and tonumber(enemy.team or 1) ~= 2 then
+            local reward_table = get_enemy_reward_table(enemy)
+            local chip_key = reward_table and (reward_table.chip or reward_table.card)
+
+            if chip_key and not provided[chip_key] then
+                provided[chip_key] = true
+                crawler_whitelist.provide_card_asset_for_player(player_id, chip_key)
+            end
+        end
+    end
+end
+
 local pick_reward_enemy = function(encounter_info)
     local candidates = {}
 
@@ -803,7 +819,10 @@ ezencounters.begin_encounter = function (player_id,encounter_info,trigger_object
             encounter_info = encounter_info,
             trigger_object = trigger_object
         })
-        local stats = await(Async.initiate_encounter(player_id,encounter_info.path,encounter_info))
+
+        preprovide_encounter_chip_assets(player_id, encounter_info)
+
+        local stats = await(Async.initiate_encounter(player_id, encounter_info.path, encounter_info))
         return stats
     end)
 end
