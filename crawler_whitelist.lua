@@ -933,13 +933,6 @@ crawler_whitelist.CARDS = {
         display_name = "PulseBeam3",
         sources = { blue_mystery = false, chip_seller = true, },
     },
-    recov10 = {
-        package_id = "com.OFC.card.EXE6-156-Recovery10",
-        asset_path = "/server/assets/chips/EXE6-Recov10.zip",
-        code = "A",
-        display_name = "Recov10",
-        sources = { blue_mystery = false, chip_seller = true, },
-    },
     recov120 = {
         package_id = "com.OFC.card.EXE6-160-Recovery120",
         asset_path = "/server/assets/chips/EXE6-Recov120.zip",
@@ -1071,13 +1064,6 @@ crawler_whitelist.CARDS = {
         asset_path = "/server/assets/chips/EXE6-VariableSword.zip",
         code = "K",
         display_name = "VariableSword",
-        sources = { blue_mystery = false, chip_seller = true, },
-    },
-    vulcan1 = {
-        package_id = "com.OFC.card.EXEPoN-004-Vulcan1",
-        asset_path = "/server/assets/chips/EXEPon-Vulcan1.zip",
-        code = "E",
-        display_name = "Vulcan1",
         sources = { blue_mystery = false, chip_seller = true, },
     },
     vulcan2 = {

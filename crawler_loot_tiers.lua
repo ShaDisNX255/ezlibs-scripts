@@ -41,14 +41,12 @@ loot_tiers.chip_seller = {
     longsword = "easy",
     markvulcan1 = "easy",
     pulsebeam1 = "easy",
-    recov10 = "easy",
     recov30 = "easy",
     recov50 = "easy",
     spreadgun1 = "easy",
     stonecube = "easy",
     thunderball = "easy",
     timebomb1 = "easy",
-    vulcan1 = "easy",
 
     -- MEDIUM
     aquasword = "medium",
