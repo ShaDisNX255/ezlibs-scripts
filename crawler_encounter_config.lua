@@ -22,10 +22,10 @@ config.area_pool_size = {
 }
 
 config.enemy_count = {
-    easy = { min = 1, max = 3, },
-    medium = { min = 3, max = 4, },
-    hard = { min = 3, max = 6, },
-    boss = { min = 4, max = 8, },
+    easy = { min = 1, max = 2, },
+    medium = { min = 2, max = 3, },
+    hard = { min = 3, max = 4, },
+    boss = { min = 3, max = 4, },
 }
 
 config.boss_chance = 0.30
