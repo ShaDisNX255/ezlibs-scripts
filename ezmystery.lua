@@ -477,6 +477,11 @@ local function collect_core_dump(
             )
         end
 
+        local direction =
+            Net.get_player_direction(
+                player_id
+            )
+
         ezmemory.play_anim_get(
             player_id
         )
@@ -543,6 +548,10 @@ local function collect_core_dump(
                 "'s Core Dump.\n" ..
                 result_text
             )
+        )
+        ezmemory.set_direction_anim(
+            player_id,
+            direction
         )
     end)
 end

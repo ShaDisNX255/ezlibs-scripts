@@ -935,6 +935,9 @@ local function reset_crawler_run_state(
     -- Chips earned during the previous dungeon run.
     player_memory.crawler_chip_unlocks = {}
 
+    -- DEV Escapes are also per-life crawler progression.
+    player_memory.crawler_dev_escapes = 0
+
     player_memory.health = nil
     player_memory.max_health = nil
 
@@ -1065,6 +1068,91 @@ function ezmemory.reset_crawler_state_after_death(
     )
 
     return true
+end
+
+function ezmemory.record_crawler_dev_escape(
+    player_id
+)
+    local safe_secret =
+        helpers.get_safe_player_secret(
+            player_id
+        )
+
+    if
+        not safe_secret or
+        safe_secret == ""
+    then
+        return nil
+    end
+
+    local player_memory =
+        ezmemory.get_player_memory(
+            safe_secret
+        )
+
+    if type(player_memory) ~= "table" then
+        return nil
+    end
+
+    local area_id =
+        Net.get_player_area(
+            player_id
+        )
+
+    if not area_id then
+        return nil
+    end
+
+    local run_id =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_run_id"
+        )
+
+    if
+        not run_id or
+        tostring(run_id) == "" or
+        tostring(run_id) == "pool"
+    then
+        return nil
+    end
+
+    local stored_run_id =
+        player_memory.meta and
+        player_memory.meta.crawler_run_id
+
+    if
+        tostring(stored_run_id or "") ~=
+        tostring(run_id)
+    then
+        return nil
+    end
+
+    local count =
+        math.max(
+            0,
+            math.floor(
+                tonumber(
+                    player_memory.crawler_dev_escapes
+                ) or 0
+            )
+        ) + 1
+
+    player_memory.crawler_dev_escapes =
+        count
+
+    ezmemory.save_player_memory(
+        safe_secret
+    )
+
+    printd(
+        "crawler DEV Escape " ..
+        tostring(count) ..
+        " for " ..
+        tostring(player_id)
+    )
+
+    return count
 end
 
 function ezmemory.handle_player_join(player_id)

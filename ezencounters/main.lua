@@ -1169,8 +1169,58 @@ Net:on("battle_results", function(event)
             encounter_finished_callbacks[player_id] = nil
         end
 
+        local battle_reason =
+            tonumber(
+                event.reason
+            ) or 0
+
+        local crawler_death =
+            battle_reason == 2
+
+        -- ====================================================
+        -- DEV ESCAPE PENALTY
+        -- ====================================================
+
         if
-            tonumber(event.reason) == 2 and
+            battle_reason == 4 and
+            player_encounter.persistent_health
+        then
+            local escape_count =
+                ezmemory.record_crawler_dev_escape(
+                    player_id
+                )
+
+            print(
+                "[ezencounters][DEV ESCAPE] player=" ..
+                tostring(player_id) ..
+                " count=" ..
+                tostring(escape_count)
+            )
+
+            if escape_count == 1 then
+                async(function()
+                    await(
+                        Async.message_player(
+                            player_id,
+                            "DEV Escape used. Warning: only 1 free DEV Escape remains. A third DEV Escape will result in deletion."
+                        )
+                    )
+                end)
+            elseif
+                escape_count and
+                escape_count >= 3
+            then
+                crawler_death =
+                    true
+            end
+        end
+
+        -- ====================================================
+        -- DELETION
+        -- ====================================================
+
+        if
+            crawler_death and
             player_encounter.persistent_health
         then
             if
