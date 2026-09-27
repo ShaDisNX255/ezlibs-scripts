@@ -423,6 +423,280 @@ local persist_battle_health = function (player_id, stats, recovery)
     ezmemory.set_player_health(player_id, health)
 end
 
+local function spawn_crawler_core_dump(
+    player_id,
+    player_encounter
+)
+    local death_position =
+        player_encounter and
+        player_encounter.death_position
+
+    if
+        not death_position or
+        not death_position.area_id
+    then
+        print(
+            "[ezencounters][death] missing death position"
+        )
+
+        return nil
+    end
+
+    local area_id =
+        death_position.area_id
+
+    local run_id =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_run_id"
+        )
+
+    if
+        not run_id or
+        tostring(run_id) == "" or
+        tostring(run_id) == "pool"
+    then
+        return nil
+    end
+
+    local core_dump_gid =
+        tonumber(
+            Net.get_area_custom_property(
+                area_id,
+                "crawler_core_dump_gid"
+            )
+        )
+
+    if not core_dump_gid then
+        print(
+            "[ezencounters][death] area is missing crawler_core_dump_gid"
+        )
+
+        return nil
+    end
+
+    local chip_keys =
+        crawler_whitelist.get_current_run_unlock_keys(
+            player_id
+        )
+
+    local money =
+        math.max(
+            0,
+            math.floor(
+                tonumber(
+                    ezmemory.get_player_money(
+                        player_id
+                    )
+                ) or 0
+            )
+        )
+
+    local hp_mems =
+        math.max(
+            0,
+            math.floor(
+                tonumber(
+                    ezmemory.count_player_item(
+                        player_id,
+                        "HPMem"
+                    )
+                ) or 0
+            )
+        )
+
+    local player_name =
+        Net.get_player_name(
+            player_id
+        ) or
+        "Unknown NetBattler"
+
+    local ok,
+          object_id =
+        pcall(
+            Net.create_object,
+            area_id,
+            {
+                name =
+                    "Core Dump",
+
+                class =
+                    "Mystery Data",
+
+                visible =
+                    true,
+
+                x =
+                    death_position.x,
+
+                y =
+                    death_position.y,
+
+                z =
+                    death_position.z,
+
+                -- YellowMysteryData.tsx is 14x43 pixels.
+                -- Runtime object dimensions use map tile units.
+                width =
+                    14 / 32,
+
+                height =
+                    43 / 32,
+
+                data = {
+                    type =
+                        "tile",
+
+                    gid =
+                        core_dump_gid,
+                },
+
+                custom_properties = {
+                    ["Type"] =
+                        "core_dump",
+
+                    ["Once"] =
+                        "true",
+
+                    ["Core Dump"] =
+                        "true",
+
+                    ["Core Dump Owner"] =
+                        tostring(
+                            player_name
+                        ),
+
+                    ["Core Dump Run ID"] =
+                        tostring(
+                            run_id
+                        ),
+
+                    ["Core Dump Chips"] =
+                        table.concat(
+                            chip_keys,
+                            ","
+                        ),
+
+                    ["Core Dump Money"] =
+                        tostring(
+                            money
+                        ),
+
+                    ["Core Dump HPMem"] =
+                        tostring(
+                            hp_mems
+                        ),
+                },
+            }
+        )
+
+    if not ok then
+        print(
+            "[ezencounters][death] failed creating Core Dump: " ..
+            tostring(object_id)
+        )
+
+        return nil
+    end
+
+    print(
+        "[ezencounters][death] Core Dump " ..
+        tostring(object_id) ..
+        " created for " ..
+        tostring(player_name) ..
+        " in " ..
+        tostring(area_id) ..
+        " chips=" ..
+        tostring(#chip_keys) ..
+        " money=" ..
+        tostring(money) ..
+        " hpmem=" ..
+        tostring(hp_mems)
+    )
+
+    return object_id
+end
+
+local function handle_crawler_death(
+    player_id,
+    player_encounter
+)
+    -- Snapshot + spawn MUST happen before resetting
+    -- crawler progression.
+    local core_dump_id =
+        spawn_crawler_core_dump(
+            player_id,
+            player_encounter
+        )
+
+    local reset_ok = false
+
+    if core_dump_id then
+        reset_ok =
+            ezmemory.reset_crawler_state_after_death(
+                player_id
+            )
+    end
+
+    if
+        core_dump_id and
+        not reset_ok
+    then
+        -- Never allow a dump to exist if the original
+        -- progression was not successfully wiped.
+        local position =
+            player_encounter.death_position
+
+        if
+            position and
+            position.area_id
+        then
+            pcall(
+                Net.remove_object,
+                position.area_id,
+                core_dump_id
+            )
+        end
+
+        core_dump_id = nil
+    end
+
+    if reset_ok then
+        crawler_whitelist.apply_for_player(
+            player_id
+        )
+    end
+
+    async(function()
+        if reset_ok then
+            await(
+                Async.message_player(
+                    player_id,
+                    "Alas! Brave NetBattler, your Navi has been deleted. But do not despair... fragments of your lost data remain in the Cyberworld. A Core Dump was left where you fell. Jack in again, and you may yet recover what was lost."
+                )
+            )
+        else
+            -- Fail safe during testing:
+            -- never wipe somebody's progress if the Core Dump
+            -- could not actually be created.
+            await(
+                Async.message_player(
+                    player_id,
+                    "Your Navi was deleted, but the Core Dump could not be created. Your crawler progress was preserved for safety."
+                )
+            )
+        end
+
+        if Net.is_player(player_id) then
+            Net.kick_player(
+                player_id,
+                "Your Navi was deleted.",
+                true
+            )
+        end
+    end)
+end
+
 local load_encounters_for_areas = function ()
     local areas = Net.list_areas()
     local area_encounter_tables = {}
@@ -815,11 +1089,49 @@ end
 ezencounters.begin_encounter = function (player_id,encounter_info,trigger_object)
     return async(function ()
         --print('[ezencounters] beginning encounter for',player_id)
-        local player_area = Net.get_player_area(player_id)
-        local encounter_table = area_encounter_tables[player_area]
+        local player_area =
+            Net.get_player_area(
+                player_id
+            )
+
+        local encounter_table =
+            area_encounter_tables[
+                player_area
+            ]
+
+        local player_position =
+            Net.get_player_position(
+                player_id
+            )
+
+        local death_position = nil
+
+        if player_position then
+            death_position = {
+                area_id =
+                    player_area,
+
+                x =
+                    player_position.x,
+
+                y =
+                    player_position.y,
+
+                z =
+                    player_position.z,
+            }
+        end
+
         players_in_encounters[player_id] = {
-            encounter_info=encounter_info,
-            persistent_health=encounter_table and encounter_table.persistent_health == true
+            encounter_info =
+                encounter_info,
+
+            persistent_health =
+                encounter_table and
+                encounter_table.persistent_health == true,
+
+            death_position =
+                death_position,
         }
         ezencounters.clear_tiles_since_encounter(player_id)
         ezbus:emit("encounter_started", {
@@ -855,6 +1167,64 @@ Net:on("battle_results", function(event)
         if encounter_finished_callbacks[player_id] then
             encounter_finished_callbacks[player_id](event)
             encounter_finished_callbacks[player_id] = nil
+        end
+
+        if
+            tonumber(event.reason) == 2 and
+            player_encounter.persistent_health
+        then
+            if
+                player_encounter.encounter_info.results_callback
+            then
+                player_encounter.encounter_info.results_callback(
+                    player_id,
+                    player_encounter.encounter_info,
+                    event,
+                    {}
+                )
+            end
+
+            handle_crawler_death(
+                player_id,
+                player_encounter
+            )
+
+            players_in_encounters[
+                player_id
+            ] = nil
+
+            ezbus:emit(
+                "encounter_finished",
+                {
+                    player_id =
+                        player_id,
+
+                    stats = {
+                        health =
+                            event.health,
+
+                        time =
+                            event.time,
+
+                        reason =
+                            event.reason,
+
+                        emotion =
+                            event.emotion,
+
+                        turns =
+                            event.turns,
+
+                        enemies =
+                            event.enemies,
+
+                        score =
+                            event.score,
+                    },
+                }
+            )
+
+            return
         end
 
         local rewards = {}

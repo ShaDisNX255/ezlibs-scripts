@@ -1533,6 +1533,37 @@ function crawler_whitelist.player_has_card_unlocked(player_id, card_key)
         unlocks[tostring(card_key)] == true
 end
 
+function crawler_whitelist.get_current_run_unlock_keys(
+    player_id
+)
+    local unlocks,
+          _,
+          active_run =
+        get_current_run_unlocks(
+            player_id
+        )
+
+    if not active_run then
+        return {}
+    end
+
+    local out = {}
+
+    for card_key,
+        is_unlocked in
+        pairs(unlocks)
+    do
+        if is_unlocked == true then
+            out[#out + 1] =
+                tostring(card_key)
+        end
+    end
+
+    table.sort(out)
+
+    return out
+end
+
 local function provide_card_asset(player_id, card_def)
     if not card_def or not card_def.asset_path then
         return

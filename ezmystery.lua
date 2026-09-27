@@ -48,9 +48,15 @@ local function resource_name(cost_type)
 end
 
 local function object_is_mystery_data(object)
+    if not object then
+        return false
+    end
+
     if object.type == "Mystery Data" or object.type == "Mystery Datum" then
         return true
     end
+
+    return false
 end
 
 local function fetch_player_avatar_and_details(player_id)
@@ -350,15 +356,249 @@ local function run_quiz_from_list(player_id, area_id, quiz_list_id, failure_mess
     return true
 end
 
+local function collect_core_dump(
+    player_id,
+    area_id,
+    object
+)
+    return async(function()
+        local props =
+            object.custom_properties or {}
+
+        local dump_run_id =
+            tostring(
+                props["Core Dump Run ID"] or
+                ""
+            )
+
+        local area_run_id =
+            tostring(
+                Net.get_area_custom_property(
+                    area_id,
+                    "dungeon_run_id"
+                ) or
+                ""
+            )
+
+        -- This should normally be impossible because the
+        -- runtime area itself disappears with the dungeon run.
+        -- Keep the check anyway so old data can never leak into
+        -- another run.
+        if
+            dump_run_id == "" or
+            dump_run_id ~= area_run_id
+        then
+            Net.remove_object(
+                area_id,
+                object.id
+            )
+
+            await(
+                Async.message_player(
+                    player_id,
+                    "The Core Dump is corrupted and can no longer be recovered."
+                )
+            )
+
+            return
+        end
+
+        -- Remove it globally BEFORE granting anything.
+        --
+        -- One Core Dump can only ever be recovered once,
+        -- regardless of who finds it.
+        Net.remove_object(
+            area_id,
+            object.id
+        )
+
+        local restored_chips = 0
+
+        local chip_text =
+            tostring(
+                props["Core Dump Chips"] or
+                ""
+            )
+
+        for card_key in
+            chip_text:gmatch("[^,]+")
+        do
+            local unlocked =
+                select(
+                    1,
+                    crawler_whitelist.unlock_card(
+                        player_id,
+                        card_key
+                    )
+                )
+
+            if unlocked then
+                restored_chips =
+                    restored_chips + 1
+            end
+        end
+
+        local money =
+            math.max(
+                0,
+                math.floor(
+                    tonumber(
+                        props["Core Dump Money"]
+                    ) or 0
+                )
+            )
+
+        if money > 0 then
+            ezmemory.set_player_money(
+                player_id,
+                ezmemory.get_player_money(
+                    player_id
+                ) + money
+            )
+        end
+
+        local hp_mems =
+            math.max(
+                0,
+                math.floor(
+                    tonumber(
+                        props["Core Dump HPMem"]
+                    ) or 0
+                )
+            )
+
+        -- give_player_item() handles the +20 max HP logic,
+        -- so restore these one at a time.
+        for _ = 1, hp_mems do
+            ezmemory.give_player_item(
+                player_id,
+                "HPMem",
+                1
+            )
+        end
+
+        ezmemory.play_anim_get(
+            player_id
+        )
+
+        Net.play_sound_for_player(
+            player_id,
+            sfx.item_get
+        )
+
+        local owner =
+            tostring(
+                props["Core Dump Owner"] or
+                "Unknown NetBattler"
+            )
+
+        local recovered = {}
+
+        if restored_chips > 0 then
+            recovered[#recovered + 1] =
+                tostring(restored_chips) ..
+                (
+                    restored_chips == 1 and
+                    " BattleChip" or
+                    " BattleChips"
+                )
+        end
+
+        if money > 0 then
+            recovered[#recovered + 1] =
+                tostring(money) ..
+                "z"
+        end
+
+        if hp_mems > 0 then
+            recovered[#recovered + 1] =
+                tostring(hp_mems) ..
+                (
+                    hp_mems == 1 and
+                    " HPMem" or
+                    " HPMems"
+                )
+        end
+
+        local result_text
+
+        if #recovered > 0 then
+            result_text =
+                "Recovered " ..
+                table.concat(
+                    recovered,
+                    ", "
+                ) ..
+                "."
+        else
+            result_text =
+                "No usable data remained."
+        end
+
+        await(
+            Async.message_player(
+                player_id,
+                "Recovered " ..
+                owner ..
+                "'s Core Dump.\n" ..
+                result_text
+            )
+        )
+    end)
+end
+
 function try_collect_datum(player_id, area_id, object)
     return async(function()
         if ezmemory.object_is_hidden_from_player(player_id, area_id, object.id) then
             return
         end
 
-        local lock_id = player_id .. "_" .. area_id .. "_" .. object.id
-        local lock = helpers.get_lock(player_id, lock_id)
+        local props =
+            object.custom_properties or {}
+
+        local is_core_dump =
+            is_property_true(
+                props["Core Dump"]
+            )
+
+        local lock_id
+
+        if is_core_dump then
+            -- Unlike normal Mystery Data, this lock MUST be
+            -- shared between every player. Two people cannot
+            -- loot the same dump simultaneously.
+            lock_id =
+                area_id ..
+                "_core_dump_" ..
+                tostring(object.id)
+        else
+            lock_id =
+                player_id ..
+                "_" ..
+                area_id ..
+                "_" ..
+                object.id
+        end
+
+        local lock =
+            helpers.get_lock(
+                player_id,
+                lock_id
+            )
         if not lock then
+            return
+        end
+
+        if is_core_dump then
+            await(
+                collect_core_dump(
+                    player_id,
+                    area_id,
+                    object
+                )
+            )
+
+            lock.release()
             return
         end
 

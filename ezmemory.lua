@@ -965,6 +965,108 @@ local function reset_crawler_run_state(
     )
 end
 
+function ezmemory.reset_crawler_state_after_death(
+    player_id
+)
+    local safe_secret =
+        helpers.get_safe_player_secret(
+            player_id
+        )
+
+    if
+        not safe_secret or
+        safe_secret == ""
+    then
+        return false
+    end
+
+    local player_memory =
+        ezmemory.get_player_memory(
+            safe_secret
+        )
+
+    if type(player_memory) ~= "table" then
+        return false
+    end
+
+    local area_id =
+        Net.get_player_area(
+            player_id
+        )
+
+    if not area_id then
+        return false
+    end
+
+    local run_id =
+        Net.get_area_custom_property(
+            area_id,
+            "dungeon_run_id"
+        )
+
+    if
+        not run_id or
+        tostring(run_id) == "" or
+        tostring(run_id) == "pool"
+    then
+        return false
+    end
+
+    -- This is the important difference between death and
+    -- starting an entirely new dungeon run.
+    --
+    -- Mystery Data already collected during this shared run
+    -- stays collected.
+    local preserved_area_memory =
+        player_memory.area_memory or {}
+
+    reset_crawler_run_state(
+        player_id,
+        safe_secret,
+        player_memory,
+        run_id
+    )
+
+    player_memory.area_memory =
+        preserved_area_memory
+
+    -- HPMems were just removed, so recalculate back down to
+    -- the area's normal base HP and fully heal for reconnect.
+    update_player_health(
+        player_id
+    )
+
+    local max_health =
+        tonumber(
+            Net.get_player_max_health(
+                player_id
+            )
+        ) or 100
+
+    Net.set_player_health(
+        player_id,
+        max_health
+    )
+
+    player_memory.health =
+        max_health
+
+    player_memory.max_health =
+        max_health
+
+    ezmemory.save_player_memory(
+        safe_secret
+    )
+
+    printd(
+        "reset crawler state after death for " ..
+        tostring(player_id) ..
+        " while preserving Mystery Data state"
+    )
+
+    return true
+end
+
 function ezmemory.handle_player_join(player_id)
     local safe_secret = helpers.get_safe_player_secret(player_id)
     local player_name = Net.get_player_name(player_id)
