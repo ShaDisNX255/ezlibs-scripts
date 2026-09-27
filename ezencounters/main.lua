@@ -541,6 +541,14 @@ local function crawler_build_positions(enemy_count)
     return positions
 end
 
+local function crawler_build_boss_positions()
+    local positions = crawler_blank_positions()
+
+    positions[2][5] = 1
+
+    return positions
+end
+
 local function crawler_pool_to_string(pool)
     local parts = {}
 
@@ -652,7 +660,7 @@ local function build_crawler_random_encounter(area_id, encounter_table)
                     tostring(math.random(1000000)),
                 path = encounter_table.crawler_package_path,
                 enemies = {{ name = boss.name, rank = boss.rank, },},
-                positions = crawler_build_positions(1),
+                positions = crawler_build_boss_positions(),
                 _crawler_reward_tier = "hard",
                 _crawler_boss = true,
             }
