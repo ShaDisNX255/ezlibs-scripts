@@ -707,7 +707,7 @@ local function get_or_create_area_encounter_table(area_id)
     end
 
     -- Keep the Net Square / default area safe
-    if area_id == "default" then
+    if area_id == "default" or area_id == "trainstation" then
         return nil
     end
 
@@ -916,8 +916,17 @@ for i, area_id in next, areas do
     end
 end
 
-Net:on("player_join", function(event)
-    preload_www_encounter_asset_for_player(event.player_id)
+Net:on("player_area_transfer", function(event)
+    local player_id = event.player_id
+    local area_id = Net.get_player_area(player_id)
+
+    -- Wait until the player reaches the generated homepage for the first time.
+    -- This avoids preloading during the initial train station arrival animation.
+    if area_id ~= "default" then
+        return
+    end
+
+    preload_www_encounter_asset_for_player(player_id)
 end)
 
 return ezencounters
