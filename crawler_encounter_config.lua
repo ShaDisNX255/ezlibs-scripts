@@ -11,6 +11,20 @@ config.package_paths = {
     boss = "/server/assets/ezlibs-assets/ezencounters/optimized/hard.zip",
 }
 
+config.mob_package_base_path = "/server/assets/mobs/"
+
+-- Most encounter names map directly to:
+--     MOB-<EncounterName>.zip
+--
+-- Only exceptions need to be listed here.
+config.mob_package_overrides = {
+    OldHeater = "MOB-OldStove.zip",
+    Ratty = "com_Dawn_ShaDis_BN3_Ratty.zip",
+    Garuebar = "MOB-Garue.zip",
+    BombCorn = "MOB-Corn.zip",
+    Volgear = "MOB-VolGear.zip",
+}
+
 config.minimum_steps_before_encounter = 50
 config.encounter_chance_per_step = 0.03
 

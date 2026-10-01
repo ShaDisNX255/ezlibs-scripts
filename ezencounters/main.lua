@@ -9,13 +9,19 @@ local crawler_whitelist = require('scripts/ezlibs-scripts/crawler_whitelist')
 
 local crawler_encounter_config = require('scripts/ezlibs-scripts/crawler_encounter_config')
 
+local enums = require('scripts/libs/enums')
+local AssetType = enums.AssetType
+local PackageType = enums.PackageType
+
 local ezencounters = {}
+
 local players_in_encounters = {}
 local player_last_position = {}
 local player_steps_since_encounter = {}
 local named_encounters = {}
 local provided_encounter_assets = {}
 local encounter_finished_callbacks = {}
+local preloaded_easy_assets_for_player = {}
 
 -- Ensure encounters directory exists
 helpers.ensure_directory(ezconfig.ENCOUNTERS_PATH)
@@ -727,6 +733,74 @@ local area_encounter_tables = load_encounters_for_areas()
 -- ============================================================
 -- CRAWLER RANDOM ENCOUNTERS
 -- ============================================================
+local CRAWLER_ENCOUNTER_PRELOAD_HINT = {
+    AssetType.DATA,
+    PackageType.ENCOUNTER,
+}
+
+local function get_crawler_mob_package_path(enemy_name)
+    local overrides =
+        crawler_encounter_config.mob_package_overrides
+        or {}
+
+    local zip_name =
+        overrides[enemy_name]
+        or ("MOB-" .. tostring(enemy_name) .. ".zip")
+
+    local base_path =
+        crawler_encounter_config.mob_package_base_path
+        or "/server/assets/mobs/"
+
+    return base_path .. zip_name
+end
+
+local function preload_crawler_easy_encounter_assets(player_id)
+    if preloaded_easy_assets_for_player[player_id] then
+        return
+    end
+
+    local provided = {}
+    local package_count = 0
+
+    for _, enemy in ipairs(
+        crawler_encounter_config.easy_pool
+        or {}
+    ) do
+        local package_path =
+            get_crawler_mob_package_path(
+                enemy.name
+            )
+
+        -- Multiple ranks and related enemies can resolve to
+        -- the same ZIP, so only provide each package once.
+        if not provided[package_path] then
+            provided[package_path] = true
+            package_count = package_count + 1
+
+            print(
+                "[ezencounters][crawler] preloading Easy mob package " ..
+                tostring(package_path) ..
+                " for " ..
+                tostring(player_id)
+            )
+
+            Net.provide_asset_for_player(
+                player_id,
+                package_path,
+                CRAWLER_ENCOUNTER_PRELOAD_HINT
+            )
+        end
+    end
+
+    preloaded_easy_assets_for_player[player_id] = true
+
+    print(
+        "[ezencounters][crawler] queued " ..
+        tostring(package_count) ..
+        " Easy mob packages for " ..
+        tostring(player_id)
+    )
+end
 
 local CRAWLER_ENEMY_CELLS = {
     { x=4,y=1 },
@@ -1351,12 +1425,50 @@ Net:on("battle_results", function(event)
     })
 end)
 
+ezencounters.handle_custom_warp = function(player_id, object_id)
+    local area_id =
+        Net.get_player_area(
+            player_id
+        )
+
+    -- Only preload when leaving the overworld through
+    -- the crawler entrance.
+    if area_id ~= "default" then
+        return
+    end
+
+    local object =
+        Net.get_object_by_id(
+            area_id,
+            object_id
+        )
+
+    if
+        not object
+        or not object.custom_properties
+        or not object.custom_properties["is_dungeon_entrance"]
+    then
+        return
+    end
+
+    print(
+        "[ezencounters][crawler] dungeon entrance used; " ..
+        "preloading Easy encounter assets for " ..
+        tostring(player_id)
+    )
+
+    preload_crawler_easy_encounter_assets(
+        player_id
+    )
+end
+
 ezencounters.handle_player_transfer = ezencounters.clear_last_position
 
 ezencounters.handle_player_disconnect = function (player_id)
     encounter_finished_callbacks[player_id] = nil
-	pending_battle_reward_packets[player_id] = nil
+    pending_battle_reward_packets[player_id] = nil
     pending_post_reward_unlocks[player_id] = nil
+    preloaded_easy_assets_for_player[player_id] = nil
     ezencounters.clear_last_position(player_id)
 end
 
