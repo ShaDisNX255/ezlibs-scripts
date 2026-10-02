@@ -19,8 +19,6 @@ config.mob_package_base_path = "/server/assets/mobs/"
 -- Only exceptions need to be listed here.
 config.mob_package_overrides = {
     OldHeater = "MOB-OldStove.zip",
-    Ratty = "com_Dawn_ShaDis_BN3_Ratty.zip",
-    Garuebar = "MOB-Garue.zip",
     BombCorn = "MOB-Corn.zip",
     Volgear = "MOB-VolGear.zip",
 }
@@ -70,8 +68,8 @@ config.easy_pool = {
     { name = "Ratty", rank = 1 },
     { name = "Dharma", rank = 1 },
     { name = "KillPlant", rank = 1 },
-    { name = "Garue", rank = 1 },
-    { name = "Garuebar", rank = 1 },
+    { name = "Spikey", rank = 1 },
+    { name = "Spikey", rank = 2 },
     { name = "Ebiron", rank = 1 },
     { name = "HardBolz", rank = 1 },
     { name = "Kabutank", rank = 1 },
@@ -117,7 +115,7 @@ config.medium_pool = {
     { name = "Curze", rank = 1 },
     { name = "Dharga", rank = 1 },
     { name = "KillWeed", rank = 1 },
-    { name = "Garuedan", rank = 1 },
+    { name = "Spikey", rank = 3 },
     { name = "Ebidel", rank = 1 },
     { name = "ColdBolz", rank = 1 },
     { name = "Kabutank", rank = 3 },

@@ -11,6 +11,9 @@ loot_tiers.blue_mystery = {
     snowcannon = "easy",
     strawdoll = "easy",
     twinfang1 = "easy",
+    deathmatch1 = "easy",
+    cmonsnake = "easy",
+    barrier = "easy",
 
     -- MEDIUM
     airwheel2 = "medium",
@@ -21,6 +24,9 @@ loot_tiers.blue_mystery = {
     lifesynchro = "medium",
     quickgauge = "medium",
     twinfang2 = "medium",
+    deathmatch2 = "medium",
+    barrier100 = "medium",
+    stelpnsh = "medium",
 
     -- HARD
     airwheel3 = "hard",
@@ -31,6 +37,9 @@ loot_tiers.blue_mystery = {
     neovariable = "hard",
     poltergeist = "hard",
     twinfang3 = "hard",
+    deathmatch3 = "hard",
+    barrier200 = "hard",
+    stelrvng = "hard",
 }
 
 
@@ -62,6 +71,7 @@ loot_tiers.chip_seller = {
     timebomb2 = "medium",
     tornado = "medium",
     vulcan2 = "medium",
+    barrier100 = "medium",
 
     -- HARD
     fullcustom = "hard",
@@ -77,6 +87,8 @@ loot_tiers.chip_seller = {
     timebomb3 = "hard",
     variablesword = "hard",
     vulcan3 = "hard",
+    barrier200 = "hard",
+    stelrvng = "hard",
 }
 
 
