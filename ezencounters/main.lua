@@ -253,7 +253,7 @@ local get_battle_reward = function(player_id, encounter_info, stats, persistent_
             tostring(tier)
         )
 
-        return finish_reward(card_reward, 0, chip_key)
+        return finish_reward(card_reward, 20, chip_key)
     end
 
     print(

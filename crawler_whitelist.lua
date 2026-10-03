@@ -816,13 +816,6 @@ crawler_whitelist.CARDS = {
         display_name = "DoublePoint",
         sources = { blue_mystery = true, chip_seller = false, },
     },
-    flameline3 = {
-        package_id = "com.OFC.card.EXEPoN-056-FlameLine3",
-        asset_path = "/server/assets/chips/EXEPon-FlameLine3.zip",
-        code = "J",
-        display_name = "FlameLine3",
-        sources = { blue_mystery = true, chip_seller = false, },
-    },
     hiboomerang = {
         package_id = "com.OFC.card.EXE6-120-HighBoomerang",
         asset_path = "/server/assets/chips/EXE6-HiBoomerang.zip",
