@@ -1169,9 +1169,8 @@ ezencounters.begin_encounter = function (player_id,encounter_info,trigger_object
             )
 
         local encounter_table =
-            area_encounter_tables[
-                player_area
-            ]
+            area_encounter_tables[player_area] or
+            get_or_create_crawler_area_table(player_area)
 
         local player_position =
             Net.get_player_position(
@@ -1352,6 +1351,43 @@ Net:on("battle_results", function(event)
         end
 
         local rewards = {}
+
+        if battle_reason == 1 and
+            player_encounter.persistent_health
+        then
+            local area_id =
+                Net.get_player_area(player_id)
+
+            local enabled =
+                Net.get_area_custom_property(
+                    area_id,
+                    "crawler_bugfrag_battle_drops"
+                ) == "true"
+
+            if enabled then
+                local score =
+                    tonumber(event.score) or 0
+
+                local amount =
+                    score >= 10 and 2 or
+                    score == 9 and 1 or
+                    0
+
+                if amount > 0 then
+                    rewards[#rewards + 1] = {
+                        type = "bugfrags",
+                        value = amount,
+                    }
+
+                    print(
+                        "[ezencounters][BASS] score=" ..
+                        tostring(score) ..
+                        " bugfrags=" ..
+                        tostring(amount)
+                    )
+                end
+            end
+        end
 
         local reward, reward_delay_ticks, recovery_reward, post_send_chip_key = get_battle_reward(
                 player_id,

@@ -200,7 +200,7 @@ config.hard_pool = {
 -- ============================================================
 
 config.boss_pool = {
-    { name = "Forte", rank = 1 },
+    --{ name = "Forte", rank = 1 },
     { name = "Gregar", rank = 1 },
     { name = "GregarBeast", rank = 3 },
     { name = "Duo", rank = 1 },
@@ -208,7 +208,7 @@ config.boss_pool = {
     { name = "Colonel", rank = 3 },
     { name = "ElementMan", rank = 1 },
     { name = "StarMan", rank = 4 },
-    { name = "Proto", rank = 1 },
+    --{ name = "Proto", rank = 1 },
     { name = "ShadowMan", rank = 4 },
     { name = "HatMan", rank = 4 },
     { name = "QuickMan", rank = 4 },
