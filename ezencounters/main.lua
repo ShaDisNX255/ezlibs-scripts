@@ -158,10 +158,6 @@ local get_battle_reward = function(player_id, encounter_info, stats, persistent_
         (encounter_info and encounter_info._crawler_reward_tier) or
         "easy"
 
-    if difficulty == "boss" then
-        difficulty = "hard"
-    end
-
     local health = tonumber(stats.health) or 0
 
     local max_health = tonumber(Net.get_player_max_health(player_id)) or 0

@@ -41,6 +41,13 @@ crawler_whitelist.CARDS = {
     -- ENCOUNTER REWARDS
     -- ========================================================
 
+    omegarocket = {
+        package_id = "com.alrysc.card.OmegaRocketBeta",
+        asset_path = "/server/assets/chips/Custom-OmegaRocketBeta.zip",
+        code = "R",
+        display_name = "OmegaRocketBeta",
+        sources = { blue_mystery = false, chip_seller = false, },
+    },
     stelpnsh = {
         package_id = "com.OFC.card.EXE6-166-StealPunish",
         asset_path = "/server/assets/chips/EXE6-StealPunish.zip",
