@@ -41,6 +41,83 @@ crawler_whitelist.CARDS = {
     -- ENCOUNTER REWARDS
     -- ========================================================
 
+    doubleneedle = {
+        package_id = "com.k1rbyat1na.card.EXE2-051-DoubleNeedle",
+        asset_path = "/server/assets/chips/EXE2-DoubleNeedle.zip",
+        code = "A",
+        display_name = "DoubleNeedle",
+        sources = { blue_mystery = false, chip_seller = false, },
+    },
+    tripleneedle = {
+        package_id = "com.k1rbyat1na.card.EXE2-052-TripleNeedle",
+        asset_path = "/server/assets/chips/EXE2-TripleNeedle.zip",
+        code = "C",
+        display_name = "TripleNeedle",
+        sources = { blue_mystery = false, chip_seller = false, },
+    },
+    tetraneedle = {
+        package_id = "com.k1rbyat1na.card.EXE2-053-TetraNeedle",
+        asset_path = "/server/assets/chips/EXE2-TetraNeedle.zip",
+        code = "C",
+        display_name = "TetraNeedle",
+        sources = { blue_mystery = false, chip_seller = false, },
+    },
+    paladinsword = {
+        package_id = "com.OFC.card.EXEPoN-129-PaladinSword",
+        asset_path = "/server/assets/chips/EXEPoN-PaladinSword.zip",
+        code = "P",
+        display_name = "PldnSwrd",
+        sources = { blue_mystery = true, chip_seller = false, },
+    },
+    attackplus20 = {
+        package_id = "com.OFC.card.EXEPoN-121-Attack+20",
+        asset_path = "/server/assets/chips/EXEPoN-Attack20.zip",
+        code = "*",
+        display_name = "AttackPlus20",
+        sources = { blue_mystery = true, chip_seller = false, },
+    },
+    longblade = {
+        package_id = "com.OFC.card.EXEPoN-042-LongBlade",
+        asset_path = "/server/assets/chips/EXEPoN-LongBlade.zip",
+        code = "B",
+        display_name = "LongBlade",
+        sources = { blue_mystery = true, chip_seller = false, },
+    },
+    wideblade = {
+        package_id = "com.OFC.card.EXEPoN-041-WideBlade",
+        asset_path = "/server/assets/chips/EXEPoN-WideBlade.zip",
+        code = "B",
+        display_name = "WideBlade",
+        sources = { blue_mystery = true, chip_seller = false, },
+    },
+    forestbomb3 = {
+        package_id = "com.OFC.card.EXEPoN-036-ForestBomb3",
+        asset_path = "/server/assets/chips/EXEPoN-ForestBomb3.zip",
+        code = "M",
+        display_name = "ForestBomb3",
+        sources = { blue_mystery = false, chip_seller = false, },
+    },
+    forestbomb2 = {
+        package_id = "com.OFC.card.EXEPoN-035-ForestBomb2",
+        asset_path = "/server/assets/chips/EXEPoN-ForestBomb2.zip",
+        code = "E",
+        display_name = "ForestBomb2",
+        sources = { blue_mystery = false, chip_seller = false, },
+    },
+    forestbomb1 = {
+        package_id = "com.OFC.card.EXEPoN-034-ForestBomb1",
+        asset_path = "/server/assets/chips/EXEPoN-ForestBomb1.zip",
+        code = "M",
+        display_name = "ForestBomb1",
+        sources = { blue_mystery = false, chip_seller = false, },
+    },
+    bamboolance = {
+        package_id = "com.OFC.card.EXE6-122-BambooLance",
+        asset_path = "/server/assets/chips/EXE6-BambooLance.zip",
+        code = "A",
+        display_name = "BambooLance",
+        sources = { blue_mystery = true, chip_seller = false, },
+    },
     omegarocket = {
         package_id = "com.alrysc.card.OmegaRocketBeta",
         asset_path = "/server/assets/chips/Custom-OmegaRocketBeta.zip",

@@ -14,9 +14,12 @@ loot_tiers.blue_mystery = {
     deathmatch1 = "easy",
     cmonsnake = "easy",
     barrier = "easy",
+    wideblade = "easy",
+    longblade = "easy",
 
     -- MEDIUM
     airwheel2 = "medium",
+    invisible = "easy",
     antidmg = "medium",
     colorpoint = "medium",
     flameline3 = "medium",
@@ -27,6 +30,7 @@ loot_tiers.blue_mystery = {
     deathmatch2 = "medium",
     barrier100 = "medium",
     stelpnsh = "medium",
+    attackplus20 = "medium",
 
     -- HARD
     airwheel3 = "hard",
@@ -40,6 +44,8 @@ loot_tiers.blue_mystery = {
     deathmatch3 = "hard",
     barrier200 = "hard",
     stelrvng = "hard",
+    bamboolance = "hard",
+    paladinsword = "hard",
 }
 
 
